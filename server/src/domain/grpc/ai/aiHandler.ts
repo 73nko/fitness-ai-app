@@ -216,7 +216,24 @@ export function aiHandler({
           focus_areas,
         } = request;
 
-        // Construct the dynamic prompt based on user profile
+        // Validate essential input
+        if (
+          !user_id ||
+          !days_per_week ||
+          days_per_week < 1 ||
+          days_per_week > 7
+        ) {
+          throw new Error(
+            'Invalid user data: user_id and valid days_per_week (1-7) are required'
+          );
+        }
+
+        // Log the request for debugging
+        log.info(
+          `Generating training plan for user ${user_id} with ${days_per_week} days per week`
+        );
+
+        // Construct the optimized prompt
         const prompt = constructTrainingPlanPrompt({
           user_id,
           age,
@@ -231,70 +248,109 @@ export function aiHandler({
           focus_areas,
         });
 
-        // Call OpenAI API
+        // Call OpenAI API with optimized parameters
         const completionResponse = await openai.chat.completions.create({
           model: 'gpt-4',
           messages: [
             {
               role: 'system',
               content:
-                'You are a professional fitness trainer specializing in creating personalized workout plans. Your task is to create a detailed, structured training plan based on the user profile information provided. The output should be in valid JSON format that can be parsed and used in an application.',
+                'You are an expert fitness trainer with years of experience creating personalized workout plans. ' +
+                'Your task is to create a detailed, well-structured training plan based on the user profile information provided. ' +
+                'Structure your response as valid JSON that follows exactly the schema specified in the prompt. ' +
+                "Ensure exercises are appropriate for the user's fitness level, medical history, and available equipment. " +
+                'Provide detailed descriptions for exercises, accurate set/rep ranges, and realistic rest times. ' +
+                'Balance the workout schedule thoughtfully across the week.',
             },
             {
               role: 'user',
               content: prompt,
             },
           ],
-          temperature: 0.7,
-          max_tokens: 2000,
+          temperature: 0.7, // Balance between creativity and consistency
+          max_tokens: 3000, // Increased for more detailed plans
+          response_format: { type: 'json_object' }, // Ensure JSON response
         });
 
-        // Parse OpenAI response
+        // Extract and parse the response
         const aiResponseContent =
           completionResponse.choices[0]?.message?.content || '{}';
+        log.info(`Received AI response for user ${user_id}`);
+
+        // Parse the AI response with enhanced error handling
         const planData = parseAIResponse(aiResponseContent);
 
-        // Create the training plan response
+        // Validate the parsed data has required fields
+        if (
+          !planData.name ||
+          !planData.objective ||
+          !planData.sessions ||
+          planData.sessions.length < 1
+        ) {
+          throw new Error('AI response missing required training plan fields');
+        }
+
+        // Create the training plan response with sanitized data
         const trainingPlan: TrainingPlan = {
           id: uuidv4(),
-          user_id: user_id,
-          name: planData.name,
-          objective: planData.objective,
-          description: planData.description,
-          days_per_week: days_per_week,
+          user_id,
+          name: planData.name.trim(),
+          objective: planData.objective.trim(),
+          description: planData.description.trim(),
+          days_per_week,
           sessions: planData.sessions.map(
-            (session: AIResponsePlan['sessions'][0]) => ({
-              day_of_week: session.day_of_week,
-              focus: session.focus,
-              exercises: session.exercises.map((exercise) => ({
-                name: exercise.name,
-                description: exercise.description || '',
-                sets: exercise.sets,
-                reps: exercise.reps,
-                rest_seconds: exercise.rest_seconds || 60,
-                notes: exercise.notes,
-                order: exercise.order,
+            (session: AIResponsePlan['sessions'][0], index: number) => ({
+              // Ensure valid day_of_week (1-7) or default based on index
+              day_of_week:
+                session.day_of_week >= 1 && session.day_of_week <= 7
+                  ? session.day_of_week
+                  : (index % 7) + 1,
+              focus: session.focus.trim(),
+              exercises: (session.exercises || []).map((exercise, exIndex) => ({
+                name: exercise.name.trim(),
+                description: exercise.description?.trim() || '',
+                // Ensure positive values for numerical fields
+                sets: Math.max(1, exercise.sets || 3),
+                reps: exercise.reps || '10',
+                rest_seconds: Math.max(30, exercise.rest_seconds || 60),
+                notes: exercise.notes?.trim(),
+                // Ensure valid order or default to index position
+                order: exercise.order || exIndex + 1,
               })),
-              estimated_duration: session.estimated_duration || 45,
-              notes: session.notes,
+              // Ensure sensible duration (30-120 minutes)
+              estimated_duration: Math.min(
+                120,
+                Math.max(30, session.estimated_duration || 45)
+              ),
+              notes: session.notes?.trim(),
             })
           ),
           generated_at: new Date().toISOString(),
           model_used: 'gpt-4',
         };
 
-        // Save training plan to database if possible
+        // Save training plan to database
         try {
           await saveTrainingPlanToDatabase(prisma, trainingPlan);
+          log.info(
+            `Successfully saved training plan to database for user ${user_id}`
+          );
         } catch (dbError) {
-          log.error('Failed to save training plan to database:', dbError);
-          // Continue even if saving fails - we still want to return the plan to the user
+          log.error(
+            `Failed to save training plan to database for user ${user_id}:`,
+            dbError
+          );
+          // Continue despite database error - we still want to return the plan to the user
         }
 
         return trainingPlan;
       } catch (error) {
         log.error('Error generating training plan:', error);
-        throw new Error('Failed to generate training plan');
+        throw new Error(
+          `Failed to generate training plan: ${
+            error instanceof Error ? error.message : 'Unknown error'
+          }`
+        );
       }
     },
   };
@@ -315,106 +371,218 @@ function constructTrainingPlanPrompt(userProfile: UserProfile): string {
     focus_areas,
   } = userProfile;
 
-  // Format fitness goals into string
-  const goalsString = fitness_goals.join(', ');
+  // Calculate BMI for additional context
+  const bmiValue = weight / ((height / 100) * (height / 100));
+  const bmi = bmiValue.toFixed(1);
 
-  // Format medical issues carefully (if any)
+  // Format fitness goals into string with emphasis on primary goals
+  const goalsString =
+    fitness_goals.length > 0
+      ? fitness_goals.join(', ')
+      : 'general fitness improvement';
+
+  // Format medical issues carefully for safety
   const medicalString =
     medical_issues.length > 0
-      ? `They have the following medical considerations: ${medical_issues.join(
+      ? `They have the following medical considerations that must be carefully accounted for in the plan: ${medical_issues.join(
           ', '
         )}.`
-      : 'They have no medical issues.';
+      : 'They have no reported medical issues.';
 
-  // Format equipment availability
+  // Format equipment availability with alternatives suggestion
   const equipmentString =
     available_equipment.length > 0
-      ? `Available equipment: ${available_equipment.join(', ')}.`
-      : 'No special equipment available, so bodyweight exercises are preferred.';
+      ? `Available equipment: ${available_equipment.join(
+          ', '
+        )}. Design exercises primarily using this equipment.`
+      : 'No special equipment available, so focus on bodyweight exercises, or suggest affordable alternatives.';
 
-  // Create the prompt
+  // Parse training preferences if it's a JSON string
+  let preferencesObj: Record<string, any> = {};
+  try {
+    if (training_preferences) {
+      preferencesObj = JSON.parse(training_preferences);
+    }
+  } catch (e) {
+    // If not valid JSON, use as a string
+  }
+
+  // Extract specific preferences if available
+  const workoutDuration = preferencesObj.workoutDuration || '45-60 minutes';
+  const preferredTime = preferencesObj.preferredTime || 'not specified';
+  const preferenceString = training_preferences
+    ? typeof preferencesObj === 'object'
+      ? `- Preferred workout duration: ${workoutDuration}\n- Preferred workout time: ${preferredTime}\n- Other preferences: ${JSON.stringify(
+          preferencesObj
+        )}`
+      : `- Additional preferences: ${training_preferences}`
+    : '';
+
+  // Create the structured prompt with clear instructions
   return `
-Create a personalized training plan for a user with the following profile:
-- Age: ${age}
+Create a personalized training plan for the following user profile:
+
+USER PROFILE:
+- Age: ${age} years
 - Height: ${height} cm
 - Weight: ${weight} kg
+- BMI: ${bmi}
 - Fitness Level: ${fitness_level}
 - Fitness Goals: ${goalsString}
-- ${medicalString}
-- ${equipmentString}
+${medicalString}
+${equipmentString}
 - Available to train ${days_per_week} days per week
-${focus_areas ? `- Wants to focus on: ${focus_areas}` : ''}
-${
-  training_preferences
-    ? `- Additional preferences: ${training_preferences}`
-    : ''
-}
+${focus_areas ? `- Wants to focus on these specific areas: ${focus_areas}` : ''}
+${preferenceString ? preferenceString : ''}
 
-Please design a structured workout plan that includes the following components:
-1. A name for the training plan
-2. Clear objective
-3. Brief description of the overall approach
-4. ${days_per_week} training sessions (one for each day)
-5. For each session, provide:
-   - The day of the week (1-7, where 1 is Monday)
-   - Main focus of the session (e.g., "Upper Body", "Lower Body")
-   - List of exercises with sets, reps, and rest periods
-   - Estimated duration of the session
-   - Any special notes or instructions
+REQUIREMENTS:
+Design a structured workout plan with exactly ${days_per_week} training sessions that:
+1. Aligns with their fitness level (${fitness_level})
+2. Addresses their primary goals (${goalsString})
+3. Respects any medical considerations
+4. Utilizes available equipment effectively
+5. Provides variety to maintain motivation
+6. Includes proper warm-up and cool-down guidance
+7. Balances intensity throughout the week
 
-Your response should be in the following JSON format:
+RESPONSE FORMAT:
+Your response must be a valid JSON object with the following structure:
+
 {
-  "name": "Plan name",
-  "objective": "Main objective",
-  "description": "Brief description",
+  "name": "Name of the training plan",
+  "objective": "Clear primary objective of the plan",
+  "description": "2-3 sentence overview of the approach and expected results",
   "sessions": [
     {
-      "day_of_week": 1,
-      "focus": "Upper Body",
-      "estimated_duration": 45,
-      "notes": "Optional notes",
+      "day_of_week": 1,  // Number from 1-7 where 1=Monday
+      "focus": "Main focus of this session (e.g., 'Upper Body', 'HIIT')",
+      "estimated_duration": 45,  // Duration in minutes
+      "notes": "Optional guidance or instructions for the session",
       "exercises": [
         {
-          "name": "Exercise name",
-          "description": "Brief description",
-          "sets": 3,
-          "reps": "8-12",
-          "rest_seconds": 60,
-          "notes": "Optional notes",
-          "order": 1
-        }
+          "name": "Name of exercise",
+          "description": "Brief description of how to perform it correctly",
+          "sets": 3,  // Number of sets
+          "reps": "8-12",  // Number or range of repetitions
+          "rest_seconds": 60,  // Rest time between sets in seconds
+          "notes": "Optional form tips or variations",
+          "order": 1  // Order of exercise in the session
+        },
+        // Additional exercises...
       ]
-    }
+    },
+    // Additional sessions up to the user's days_per_week...
   ]
 }
 
-Remember to adapt the exercises to the user's fitness level, goals, and available equipment. Ensure the plan is realistic and sustainable.
+IMPORTANT GUIDELINES:
+- Create exactly ${days_per_week} training sessions
+- For a ${fitness_level} fitness level, include appropriate exercise complexity
+- Balance muscle groups throughout the week to allow for recovery
+- Include proper progression mechanisms
+- Ensure exercise selections address the main goals: ${goalsString}
+${
+  medical_issues.length > 0
+    ? '- Adapt exercises to accommodate their medical considerations'
+    : ''
+}
+${
+  available_equipment.length > 0
+    ? '- Primarily use the equipment they have available'
+    : '- Focus on bodyweight exercises that require minimal equipment'
+}
+
+The response must be in valid JSON format that can be parsed directly.
 `;
 }
 
 // Helper function to parse the AI response
 function parseAIResponse(response: string): AIResponsePlan {
   try {
-    // Extract JSON if it's wrapped in markdown code blocks
-    const jsonMatch =
-      response.match(/```(?:json)?([\s\S]*?)```/) ||
-      response.match(/{[\s\S]*}/);
-    const jsonString = jsonMatch
-      ? jsonMatch[0].replace(/```json|```/g, '')
-      : response;
+    // First, try to parse as direct JSON
+    try {
+      return JSON.parse(response);
+    } catch (directError) {
+      // If direct parsing fails, try to extract JSON from markdown
 
-    // Parse the JSON response
-    return JSON.parse(jsonString);
+      // Check for JSON code blocks
+      const jsonMatch =
+        response.match(/```(?:json)?([\s\S]*?)```/) ||
+        response.match(/```([\s\S]*?)```/);
+
+      if (jsonMatch && jsonMatch[1]) {
+        // Try parsing content of code block
+        try {
+          return JSON.parse(jsonMatch[1].trim());
+        } catch (blockError) {
+          // Fall through to next method
+        }
+      }
+
+      // Try to find content that looks like JSON object
+      const objectMatch = response.match(/{[\s\S]*}/);
+      if (objectMatch) {
+        try {
+          return JSON.parse(objectMatch[0]);
+        } catch (objectError) {
+          // Fall through to default response
+        }
+      }
+
+      // If all parsing attempts fail, log the issue and return fallback
+      console.error(
+        'Failed to parse AI response - no valid JSON found:',
+        response.substring(0, 200) + '...'
+      );
+      return createFallbackPlan();
+    }
   } catch (error) {
-    console.error('Failed to parse AI response:', error);
-    // Return a basic structure if parsing fails
-    return {
-      name: 'Basic Training Plan',
-      objective: 'General fitness',
-      description: 'A simple training program focusing on full body workouts',
-      sessions: [],
-    };
+    console.error('Critical error parsing AI response:', error);
+    return createFallbackPlan();
   }
+}
+
+// Helper function to create a fallback plan when parsing fails
+function createFallbackPlan(): AIResponsePlan {
+  return {
+    name: 'Basic Fitness Plan',
+    objective: 'General fitness maintenance',
+    description:
+      'A simple training program focusing on full body workouts with minimal equipment',
+    sessions: [
+      {
+        day_of_week: 1,
+        focus: 'Full Body Basics',
+        estimated_duration: 45,
+        exercises: [
+          {
+            name: 'Push-ups',
+            description: 'Standard push-ups or from knees if needed',
+            sets: 3,
+            reps: '8-12',
+            rest_seconds: 60,
+            order: 1,
+          },
+          {
+            name: 'Bodyweight Squats',
+            description: 'Standard squats with proper form',
+            sets: 3,
+            reps: '10-15',
+            rest_seconds: 60,
+            order: 2,
+          },
+          {
+            name: 'Plank',
+            description: 'Hold for time with proper form',
+            sets: 3,
+            reps: '30-45 seconds',
+            rest_seconds: 60,
+            order: 3,
+          },
+        ],
+      },
+    ],
+  };
 }
 
 // Helper function to save the training plan to the database
@@ -428,7 +596,7 @@ async function saveTrainingPlanToDatabase(
       id: trainingPlan.id,
       userId: trainingPlan.user_id,
       name: trainingPlan.name,
-      description: trainingPlan.description,
+      description: trainingPlan.description || '',
       isActive: true,
       generatedBy: trainingPlan.model_used,
     },
@@ -455,7 +623,7 @@ async function saveTrainingPlanToDatabase(
           exerciseName: exercise.name,
           sets: exercise.sets,
           reps: exercise.reps,
-          weight: null, // User will fill this in when they actually do the workout
+          weight: null, // User will fill this in when they do the workout
           feedback: exercise.notes || null,
         },
       });
