@@ -65,11 +65,34 @@ interface WorkoutRecordResponse {
   notes?: string;
 }
 
+// Interface for Exercise Feedback
+interface ExerciseFeedbackInput {
+  exercise_name: string;
+  reps: string;
+  weight: number;
+  rir: number;
+  notes?: string;
+}
+
+// Interface for Session Feedback Request
+interface SubmitSessionFeedbackRequest {
+  user_id: string;
+  session_id: string;
+  exercises_feedback: ExerciseFeedbackInput[];
+}
+
+// Interface for Session Feedback Response
+interface SubmitSessionFeedbackResponse {
+  success: boolean;
+  message: string;
+}
+
 const prisma = new PrismaClient();
 
 export interface TrainingHandler {
   GenerateTrainingPlan: UntypedHandleCall;
   RecordWorkout: UntypedHandleCall;
+  SubmitSessionFeedback: UntypedHandleCall;
 }
 
 /**
@@ -252,6 +275,100 @@ export const trainingHandler: TrainingHandler = {
       callback(null, response);
     } catch (error) {
       console.error('Error in RecordWorkout:', error);
+      callback({
+        code: 13, // INTERNAL
+        message: 'An internal error occurred',
+      });
+    }
+  },
+
+  /**
+   * Submit feedback for a completed training session
+   */
+  SubmitSessionFeedback: async (
+    call: ServerUnaryCall<
+      SubmitSessionFeedbackRequest,
+      SubmitSessionFeedbackResponse
+    >,
+    callback: sendUnaryData<SubmitSessionFeedbackResponse>
+  ) => {
+    try {
+      const { user_id, session_id, exercises_feedback } = call.request;
+
+      // Validate that session exists and belongs to the user
+      const trainingSession = await prisma.trainingSession.findFirst({
+        where: {
+          id: session_id,
+          userId: user_id,
+        },
+      });
+
+      if (!trainingSession) {
+        return callback({
+          code: 5, // NOT_FOUND
+          message: 'Training session not found or does not belong to this user',
+        });
+      }
+
+      // Process each exercise feedback
+      const updatePromises = exercises_feedback.map(async (feedback) => {
+        // Find the exercise log by session and exercise name
+        const exerciseLog = await prisma.exerciseLog.findFirst({
+          where: {
+            trainingSessionId: session_id,
+            userId: user_id,
+            exerciseName: feedback.exercise_name,
+          },
+        });
+
+        if (!exerciseLog) {
+          console.error(
+            `Exercise log not found for ${feedback.exercise_name} in session ${session_id}`
+          );
+          return null;
+        }
+
+        // Update the exercise log with feedback data
+        return prisma.exerciseLog.update({
+          where: { id: exerciseLog.id },
+          data: {
+            reps: feedback.reps,
+            weight: feedback.weight,
+            rir: feedback.rir,
+            feedback: feedback.notes || exerciseLog.feedback,
+          },
+        });
+      });
+
+      // Wait for all updates to complete
+      const results = await Promise.all(updatePromises);
+
+      // Count successful updates
+      const successfulUpdates = results.filter(Boolean).length;
+
+      // Mark the session as completed if it wasn't already
+      if (!trainingSession.completed) {
+        await prisma.trainingSession.update({
+          where: { id: session_id },
+          data: {
+            completed: true,
+            completedDate: new Date(),
+          },
+        });
+      }
+
+      // Prepare the response
+      const response: SubmitSessionFeedbackResponse = {
+        success: successfulUpdates > 0,
+        message:
+          successfulUpdates > 0
+            ? `Successfully updated ${successfulUpdates} exercise logs`
+            : 'No exercise logs were updated',
+      };
+
+      callback(null, response);
+    } catch (error) {
+      console.error('Error in SubmitSessionFeedback:', error);
       callback({
         code: 13, // INTERNAL
         message: 'An internal error occurred',
