@@ -1,5 +1,5 @@
 import { FastifyPluginAsync } from 'fastify';
-import { generateTrainingPlan } from '@/domain/ai/controller';
+import { generateTrainingPlan } from './controller';
 
 interface GenerateTrainingRequest {
   userId: string;

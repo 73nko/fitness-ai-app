@@ -53,7 +53,7 @@ async function registerPlugins() {
   await server.register(aiGrpcService.default);
 
   // Swagger documentation
-  await server.register(require('fastify-swagger'), {
+  await server.register(require('@fastify/swagger'), {
     routePrefix: '/documentation',
     swagger: {
       info: {

@@ -23,7 +23,7 @@ const {
   Public,
   getRuntime,
   createParam,
-} = require('./runtime/library.js')
+} = require('./runtime/binary.js')
 
 
 const Prisma = {}
@@ -204,7 +204,8 @@ const config = {
       "fromEnvVar": null
     },
     "config": {
-      "engineType": "library"
+      "enableTracing": "false",
+      "engineType": "binary"
     },
     "binaryTargets": [
       {
@@ -228,17 +229,16 @@ const config = {
     "db"
   ],
   "activeProvider": "postgresql",
-  "postinstall": false,
   "inlineDatasources": {
     "db": {
       "url": {
         "fromEnvVar": "DATABASE_URL",
-        "value": null
+        "value": "postgresql://postgres:postgres@localhost:5432/fitness_ai?schema=public"
       }
     }
   },
-  "inlineSchema": "// This is your Prisma schema file,\n// learn more about it in the docs: https://pris.ly/d/prisma-schema\n\n// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?\n// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init\n\ngenerator client {\n  provider = \"prisma-client-js\"\n  output   = \"../generated/prisma\"\n}\n\ndatasource db {\n  provider = \"postgresql\"\n  url      = env(\"DATABASE_URL\")\n}\n\n// User model\nmodel User {\n  id               String            @id @default(uuid())\n  email            String            @unique\n  password         String\n  firstName        String\n  lastName         String\n  age              Int?\n  weight           Float?\n  height           Float?\n  experience       String? // beginner, intermediate, advanced\n  availability     Json? // Weekly availability in a structured format\n  createdAt        DateTime          @default(now())\n  updatedAt        DateTime          @updatedAt\n  profile          Profile?\n  trainingPlans    TrainingPlan[]\n  trainingSessions TrainingSession[]\n  exerciseLogs     ExerciseLog[]\n\n  @@index([email])\n}\n\n// User profile with fitness data\nmodel Profile {\n  id                  String   @id @default(uuid())\n  userId              String   @unique\n  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)\n  fitnessLevel        String? // beginner, intermediate, advanced\n  fitnessGoals        String[] // [\"lose_weight\", \"build_muscle\", etc.]\n  medicalIssues       String[]\n  availableEquipment  String[]\n  trainingPreferences Json?\n  createdAt           DateTime @default(now())\n  updatedAt           DateTime @updatedAt\n\n  @@index([userId])\n}\n\n// Training Plan model\nmodel TrainingPlan {\n  id               String            @id @default(uuid())\n  userId           String\n  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)\n  name             String\n  description      String?\n  createdAt        DateTime          @default(now())\n  updatedAt        DateTime          @updatedAt\n  isActive         Boolean           @default(true)\n  generatedBy      String            @default(\"gpt-4\") // AI model that generated the plan\n  trainingSessions TrainingSession[]\n\n  @@index([userId])\n}\n\n// Training Session model\nmodel TrainingSession {\n  id             String        @id @default(uuid())\n  trainingPlanId String\n  trainingPlan   TrainingPlan  @relation(fields: [trainingPlanId], references: [id], onDelete: Cascade)\n  userId         String\n  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)\n  dayOfWeek      Int // 1-7 representing Monday-Sunday\n  feedback       String? // General feedback for the session\n  completed      Boolean       @default(false)\n  scheduledDate  DateTime?\n  completedDate  DateTime?\n  createdAt      DateTime      @default(now())\n  updatedAt      DateTime      @updatedAt\n  exerciseLogs   ExerciseLog[]\n\n  @@index([trainingPlanId])\n  @@index([userId])\n}\n\n// Exercise Log model\nmodel ExerciseLog {\n  id                String          @id @default(uuid())\n  trainingSessionId String\n  trainingSession   TrainingSession @relation(fields: [trainingSessionId], references: [id], onDelete: Cascade)\n  userId            String\n  user              User            @relation(fields: [userId], references: [id], onDelete: Cascade)\n  exerciseName      String\n  sets              Int\n  reps              String // Can be a range like \"8-12\" or specific like \"10\"\n  weight            Float?\n  rir               Int? // Rate of Perceived Exertion (RPE) or Reps In Reserve (RIR)\n  feedback          String? // User's feelings/feedback on the exercise\n  createdAt         DateTime        @default(now())\n  updatedAt         DateTime        @updatedAt\n\n  @@index([trainingSessionId])\n  @@index([userId])\n}\n",
-  "inlineSchemaHash": "796c6e733068f5bc1e3b27d96d51e8169bf7a07c542e4c31da21b4a3ed1e983b",
+  "inlineSchema": "// This is your Prisma schema file,\n// learn more about it in the docs: https://pris.ly/d/prisma-schema\n\n// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?\n// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init\n\ngenerator client {\n  provider      = \"prisma-client-js\"\n  output        = \"../generated/prisma\"\n  engineType    = \"binary\"\n  enableTracing = false\n}\n\ndatasource db {\n  provider = \"postgresql\"\n  url      = env(\"DATABASE_URL\")\n}\n\n// User model\nmodel User {\n  id               String            @id @default(uuid())\n  email            String            @unique\n  password         String\n  firstName        String\n  lastName         String\n  age              Int?\n  weight           Float?\n  height           Float?\n  experience       String? // beginner, intermediate, advanced\n  availability     Json? // Weekly availability in a structured format\n  createdAt        DateTime          @default(now())\n  updatedAt        DateTime          @updatedAt\n  profile          Profile?\n  trainingPlans    TrainingPlan[]\n  trainingSessions TrainingSession[]\n  exerciseLogs     ExerciseLog[]\n\n  @@index([email])\n}\n\n// User profile with fitness data\nmodel Profile {\n  id                  String   @id @default(uuid())\n  userId              String   @unique\n  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)\n  fitnessLevel        String? // beginner, intermediate, advanced\n  fitnessGoals        String[] // [\"lose_weight\", \"build_muscle\", etc.]\n  medicalIssues       String[]\n  availableEquipment  String[]\n  trainingPreferences Json?\n  createdAt           DateTime @default(now())\n  updatedAt           DateTime @updatedAt\n\n  @@index([userId])\n}\n\n// Training Plan model\nmodel TrainingPlan {\n  id               String            @id @default(uuid())\n  userId           String\n  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)\n  name             String\n  description      String?\n  createdAt        DateTime          @default(now())\n  updatedAt        DateTime          @updatedAt\n  isActive         Boolean           @default(true)\n  generatedBy      String            @default(\"gpt-4\") // AI model that generated the plan\n  trainingSessions TrainingSession[]\n\n  @@index([userId])\n}\n\n// Training Session model\nmodel TrainingSession {\n  id             String        @id @default(uuid())\n  trainingPlanId String\n  trainingPlan   TrainingPlan  @relation(fields: [trainingPlanId], references: [id], onDelete: Cascade)\n  userId         String\n  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)\n  dayOfWeek      Int // 1-7 representing Monday-Sunday\n  feedback       String? // General feedback for the session\n  completed      Boolean       @default(false)\n  scheduledDate  DateTime?\n  completedDate  DateTime?\n  createdAt      DateTime      @default(now())\n  updatedAt      DateTime      @updatedAt\n  exerciseLogs   ExerciseLog[]\n\n  @@index([trainingPlanId])\n  @@index([userId])\n}\n\n// Exercise Log model\nmodel ExerciseLog {\n  id                String          @id @default(uuid())\n  trainingSessionId String\n  trainingSession   TrainingSession @relation(fields: [trainingSessionId], references: [id], onDelete: Cascade)\n  userId            String\n  user              User            @relation(fields: [userId], references: [id], onDelete: Cascade)\n  exerciseName      String\n  sets              Int\n  reps              String // Can be a range like \"8-12\" or specific like \"10\"\n  weight            Float?\n  rir               Int? // Rate of Perceived Exertion (RPE) or Reps In Reserve (RIR)\n  feedback          String? // User's feelings/feedback on the exercise\n  createdAt         DateTime        @default(now())\n  updatedAt         DateTime        @updatedAt\n\n  @@index([trainingSessionId])\n  @@index([userId])\n}\n",
+  "inlineSchemaHash": "e5db385c3736c0562432f5f3d5d92d10c25c234d42b73d83dfe5124499eb2d14",
   "copyEngine": true
 }
 
@@ -265,7 +265,7 @@ config.engineWasm = undefined
 config.compilerWasm = undefined
 
 
-const { warnEnvConflicts } = require('./runtime/library.js')
+const { warnEnvConflicts } = require('./runtime/binary.js')
 
 warnEnvConflicts({
     rootEnvPath: config.relativeEnvPaths.rootEnvPath && path.resolve(config.dirname, config.relativeEnvPaths.rootEnvPath),
@@ -277,8 +277,8 @@ exports.PrismaClient = PrismaClient
 Object.assign(exports, Prisma)
 
 // file annotations for bundling tools to include these files
-path.join(__dirname, "libquery_engine-darwin-arm64.dylib.node");
-path.join(process.cwd(), "generated/prisma/libquery_engine-darwin-arm64.dylib.node")
+path.join(__dirname, "query-engine-darwin-arm64");
+path.join(process.cwd(), "generated/prisma/query-engine-darwin-arm64")
 // file annotations for bundling tools to include these files
 path.join(__dirname, "schema.prisma");
 path.join(process.cwd(), "generated/prisma/schema.prisma")
