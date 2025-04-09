@@ -87,12 +87,38 @@ interface SubmitSessionFeedbackResponse {
   message: string;
 }
 
+// Interface for Progression Suggestions Request
+interface ProgressionSuggestionsRequest {
+  user_id: string;
+  training_plan_id: string;
+  history_weeks: number;
+}
+
+// Interface for Exercise Modification Suggestion
+interface ExerciseModificationSuggestion {
+  exercise_id: string;
+  suggestion: string;
+  new_weight?: number;
+  replace_with?: string;
+}
+
+// Interface for Progression Suggestions Response
+interface ProgressionSuggestionsResponse {
+  training_plan_id: string;
+  deload_recommended: boolean;
+  summary: string;
+  modified_exercises: ExerciseModificationSuggestion[];
+  generated_at: string;
+  model_used: string;
+}
+
 const prisma = new PrismaClient();
 
 export interface TrainingHandler {
   GenerateTrainingPlan: UntypedHandleCall;
   RecordWorkout: UntypedHandleCall;
   SubmitSessionFeedback: UntypedHandleCall;
+  GenerateProgressionSuggestions: UntypedHandleCall;
 }
 
 /**
@@ -375,6 +401,310 @@ export const trainingHandler: TrainingHandler = {
       });
     }
   },
+
+  /**
+   * Generate progression suggestions based on user's exercise history
+   */
+  GenerateProgressionSuggestions: async (
+    call: ServerUnaryCall<
+      ProgressionSuggestionsRequest,
+      ProgressionSuggestionsResponse
+    >,
+    callback: sendUnaryData<ProgressionSuggestionsResponse>
+  ) => {
+    try {
+      const { user_id, training_plan_id, history_weeks } = call.request;
+
+      // Check if user and training plan exist
+      const user = await prisma.user.findUnique({
+        where: { id: user_id },
+      });
+
+      if (!user) {
+        return callback({
+          code: 5, // NOT_FOUND
+          message: 'User not found',
+        });
+      }
+
+      const trainingPlan = await prisma.trainingPlan.findUnique({
+        where: { id: training_plan_id },
+        include: {
+          trainingSessions: {
+            include: {
+              exerciseLogs: true,
+            },
+          },
+        },
+      });
+
+      if (!trainingPlan) {
+        return callback({
+          code: 5, // NOT_FOUND
+          message: 'Training plan not found',
+        });
+      }
+
+      // Calculate date range for the history analysis
+      const endDate = new Date();
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - history_weeks * 7);
+
+      // Get exercise logs for the specified period
+      const exerciseLogs = await prisma.exerciseLog.findMany({
+        where: {
+          userId: user_id,
+          trainingSession: {
+            trainingPlanId: training_plan_id,
+          },
+          createdAt: {
+            gte: startDate,
+            lte: endDate,
+          },
+        },
+        orderBy: {
+          createdAt: 'asc',
+        },
+      });
+
+      // Get user profile for additional context
+      const userProfile = await prisma.profile.findUnique({
+        where: { userId: user_id },
+      });
+
+      // Group logs by exercise
+      const exerciseHistoryMap = new Map();
+
+      exerciseLogs.forEach((log) => {
+        if (!exerciseHistoryMap.has(log.exerciseName)) {
+          exerciseHistoryMap.set(log.exerciseName, []);
+        }
+        exerciseHistoryMap.get(log.exerciseName).push({
+          date: log.createdAt,
+          sets: log.sets,
+          reps: log.reps,
+          weight: log.weight,
+          rir: log.rir,
+          feedback: log.feedback,
+        });
+      });
+
+      // Convert map to array for prompt construction
+      const exerciseHistoryArray = Array.from(exerciseHistoryMap.entries()).map(
+        ([name, logs]) => ({
+          exercise_name: name,
+          history: logs,
+        })
+      );
+
+      // Construct a prompt for OpenAI to analyze the exercise history
+      const prompt = constructProgressionPrompt({
+        userId: user_id,
+        trainingPlanId: training_plan_id,
+        userProfile,
+        exerciseHistory: exerciseHistoryArray,
+        trainingPlan,
+      });
+
+      // Import OpenAI here to avoid circular dependencies
+      const OpenAI = require('openai');
+      const openai = new OpenAI({
+        apiKey: process.env.OPENAI_API_KEY,
+      });
+
+      // Call OpenAI API
+      const completion = await openai.chat.completions.create({
+        model: 'gpt-4-turbo',
+        messages: [
+          {
+            role: 'system',
+            content:
+              "You are a professional strength coach and exercise physiologist. Analyze the user's exercise history and provide specific progression suggestions.",
+          },
+          {
+            role: 'user',
+            content: prompt,
+          },
+        ],
+        response_format: { type: 'json_object' },
+        temperature: 0.2,
+      });
+
+      // Parse the response
+      const aiResponse = parseAIResponse(
+        completion.choices[0]?.message?.content || '{}'
+      );
+
+      // Format the response
+      const response: ProgressionSuggestionsResponse = {
+        training_plan_id: training_plan_id,
+        deload_recommended: aiResponse.deload_recommended || false,
+        summary:
+          aiResponse.summary ||
+          'No specific recommendations at this time. Continue with your current plan.',
+        modified_exercises:
+          aiResponse.exercise_modifications?.map((modification) => ({
+            exercise_id: modification.exercise_id,
+            suggestion: modification.suggestion,
+            new_weight: modification.new_weight,
+            replace_with: modification.replace_with,
+          })) || [],
+        generated_at: new Date().toISOString(),
+        model_used: 'gpt-4-turbo',
+      };
+
+      callback(null, response);
+    } catch (error) {
+      console.error('Error in GenerateProgressionSuggestions:', error);
+      callback({
+        code: 13, // INTERNAL
+        message: 'An internal error occurred',
+        details: error instanceof Error ? error.message : String(error),
+      });
+    }
+  },
 };
 
+/**
+ * Construct the prompt for OpenAI to analyze exercise history and suggest progressions
+ */
+function constructProgressionPrompt(data: {
+  userId: string;
+  trainingPlanId: string;
+  userProfile: any;
+  exerciseHistory: Array<{
+    exercise_name: string;
+    history: Array<{
+      date: Date;
+      sets: number;
+      reps: string;
+      weight?: number | null;
+      rir?: number | null;
+      feedback?: string | null;
+    }>;
+  }>;
+  trainingPlan: any;
+}): string {
+  const { userId, trainingPlanId, userProfile, exerciseHistory, trainingPlan } =
+    data;
+
+  // Format the exercise history for readability
+  const formattedExerciseHistory = exerciseHistory.map((exercise) => {
+    const historyEntries = exercise.history.map((entry) => {
+      return {
+        date: entry.date.toISOString().split('T')[0],
+        sets: entry.sets,
+        reps: entry.reps,
+        weight: entry.weight || 'bodyweight',
+        rir: entry.rir !== null ? entry.rir : 'not recorded',
+        feedback: entry.feedback || 'no feedback',
+      };
+    });
+
+    return {
+      exercise_name: exercise.exercise_name,
+      history: historyEntries,
+    };
+  });
+
+  // Create a structured prompt
+  return `
+# Exercise Progression Analysis
+
+## User Information
+- User ID: ${userId}
+- Training Plan ID: ${trainingPlanId}
+- Fitness Level: ${userProfile?.fitnessLevel || 'Unknown'}
+- Fitness Goals: ${JSON.stringify(userProfile?.fitnessGoals || [])}
+- Medical Issues: ${JSON.stringify(userProfile?.medicalIssues || [])}
+
+## Training Plan Information
+- Name: ${trainingPlan.name}
+- Description: ${trainingPlan.description || 'No description'}
+- Created: ${trainingPlan.createdAt.toISOString().split('T')[0]}
+- Is Active: ${trainingPlan.isActive}
+
+## Exercise History (Last ${
+    formattedExerciseHistory[0]?.history.length || 0
+  } Sessions)
+${JSON.stringify(formattedExerciseHistory, null, 2)}
+
+## Analysis Request
+Based on the exercise history provided:
+
+1. Analyze each exercise's progression pattern.
+2. Identify signs of plateaus, fatigue, or untapped potential.
+3. Suggest specific modifications for each exercise that needs changes.
+4. If appropriate, recommend deload for the entire routine or specific exercises.
+5. Provide an overall summary of recommended changes.
+
+Please return your analysis in the following JSON format:
+{
+  "deload_recommended": boolean,
+  "summary": "Overall summary of the analysis and recommendations",
+  "exercise_modifications": [
+    {
+      "exercise_id": "exercise_name (as identifier)",
+      "suggestion": "Detailed explanation of what to change",
+      "new_weight": optional_new_weight_recommendation_numeric,
+      "replace_with": "optional_replacement_exercise"
+    }
+  ]
+}
+`;
+}
+
+/**
+ * Parse the AI response to extract progression suggestions
+ */
+function parseAIResponse(response: string): {
+  deload_recommended?: boolean;
+  summary?: string;
+  exercise_modifications?: Array<{
+    exercise_id: string;
+    suggestion: string;
+    new_weight?: number;
+    replace_with?: string;
+  }>;
+} {
+  try {
+    // Parse the JSON response
+    const parsedResponse = JSON.parse(response);
+
+    // Basic validation
+    if (typeof parsedResponse !== 'object') {
+      console.error('Invalid response format: not an object');
+      return createFallbackResponse();
+    }
+
+    // Return the parsed response
+    return {
+      deload_recommended: !!parsedResponse.deload_recommended,
+      summary:
+        parsedResponse.summary || 'No specific recommendations at this time.',
+      exercise_modifications: Array.isArray(
+        parsedResponse.exercise_modifications
+      )
+        ? parsedResponse.exercise_modifications
+        : [],
+    };
+  } catch (error) {
+    console.error('Error parsing AI response:', error);
+    return createFallbackResponse();
+  }
+}
+
+/**
+ * Create a fallback response for when AI parsing fails
+ */
+function createFallbackResponse() {
+  return {
+    deload_recommended: false,
+    summary:
+      'Unable to generate specific recommendations at this time. Please continue with your current plan and consult with a fitness professional if needed.',
+    exercise_modifications: [],
+  };
+}
+
+// Export the training handler
 export default trainingHandler;

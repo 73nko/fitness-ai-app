@@ -17,6 +17,7 @@ service TrainingService {
   rpc UpdateTrainingPlan(UpdateTrainingRequest) returns (TrainingPlanResponse);
   rpc ListUserTrainingPlans(UserIdRequest) returns (TrainingPlansListResponse);
   rpc SubmitSessionFeedback(SubmitSessionFeedbackRequest) returns (SubmitSessionFeedbackResponse);
+  rpc GenerateProgressionSuggestions(ProgressionSuggestionsRequest) returns (ProgressionSuggestionsResponse);
 }
 
 // User related messages
@@ -145,4 +146,27 @@ message SubmitSessionFeedbackRequest {
 message SubmitSessionFeedbackResponse {
   bool success = 1;
   string message = 2;
+}
+
+// Progression suggestions related messages
+message ProgressionSuggestionsRequest {
+  string user_id = 1;
+  string training_plan_id = 2;
+  int32 history_weeks = 3; // Number of weeks of history to analyze (2-4 typically)
+}
+
+message ExerciseModificationSuggestion {
+  string exercise_id = 1;
+  string suggestion = 2;
+  float new_weight = 3;
+  string replace_with = 4;
+}
+
+message ProgressionSuggestionsResponse {
+  string training_plan_id = 1;
+  bool deload_recommended = 2;
+  string summary = 3;
+  repeated ExerciseModificationSuggestion modified_exercises = 4;
+  string generated_at = 5;
+  string model_used = 6;
 }

@@ -8,6 +8,7 @@ import OpenAI from 'openai';
 // Import domain handlers
 import createUserServiceHandler from '../domain/grpc/user/userHandler';
 import { aiHandler } from '../domain/grpc/ai/aiHandler';
+import trainingHandler from '../domain/grpc/training/trainingHandler';
 // Other domain handlers will be imported similarly as they're implemented
 // import createTrainingServiceHandler from '../domain/grpc/training/trainingHandler';
 
@@ -34,6 +35,7 @@ export function initGrpcServer({
   const userProtoPath = path.join(PROTO_DIR, 'user/user.proto');
   const trainingProtoPath = path.join(PROTO_DIR, 'training/training.proto');
   const aiProtoPath = path.join(PROTO_DIR, 'ai/ai.proto');
+  const servicesProtoPath = path.join(PROTO_DIR, 'services.proto');
 
   // Load the user service
   const userPackageDefinition = protoLoader.loadSync(userProtoPath, {
@@ -57,9 +59,8 @@ export function initGrpcServer({
   // Add user service to server
   server.addService(userProto.UserService.service, userHandler);
 
-  // Training service will be loaded similarly
-  /*
-  const trainingPackageDefinition = protoLoader.loadSync(trainingProtoPath, {
+  // Load the services proto which includes the TrainingService
+  const servicesPackageDefinition = protoLoader.loadSync(servicesProtoPath, {
     keepCase: true,
     longs: String,
     enums: String,
@@ -67,14 +68,14 @@ export function initGrpcServer({
     oneofs: true,
   });
 
-  const trainingProto = grpc.loadPackageDefinition(trainingPackageDefinition).training as any;
+  const servicesProto = grpc.loadPackageDefinition(servicesPackageDefinition)
+    .fitness as any;
 
-  const trainingHandler = createTrainingServiceHandler({
-    prisma,
-  });
-
-  server.addService(trainingProto.TrainingService.service, trainingHandler);
-  */
+  // Add training service to server
+  server.addService(
+    servicesProto.TrainingService.service,
+    trainingHandler as any
+  );
 
   // AI service implementation
   const aiPackageDefinition = protoLoader.loadSync(aiProtoPath, {
