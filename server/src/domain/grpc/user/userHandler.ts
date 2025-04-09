@@ -48,12 +48,12 @@ function createUserServiceHandler({
           password: hashedPassword,
           firstName: first_name,
           lastName: last_name,
+          age: profile_data?.age,
+          weight: profile_data?.weight,
+          height: profile_data?.height,
           ...(profile_data && {
             profile: {
               create: {
-                age: profile_data.age,
-                weight: profile_data.weight,
-                height: profile_data.height,
                 fitnessLevel: profile_data.fitness_level,
                 fitnessGoals: profile_data.fitness_goals,
                 medicalIssues: profile_data.medical_issues,
@@ -80,9 +80,9 @@ function createUserServiceHandler({
           last_name: newUser.lastName,
           profile: newUser.profile
             ? {
-                age: newUser.profile.age,
-                weight: newUser.profile.weight,
-                height: newUser.profile.height,
+                age: newUser.age,
+                weight: newUser.weight,
+                height: newUser.height,
                 fitness_level: newUser.profile.fitnessLevel,
                 fitness_goals: newUser.profile.fitnessGoals,
                 medical_issues: newUser.profile.medicalIssues,
@@ -206,9 +206,9 @@ function createUserServiceHandler({
           },
           profile: user.profile
             ? {
-                age: user.profile.age,
-                weight: user.profile.weight,
-                height: user.profile.height,
+                age: user.age,
+                weight: user.weight,
+                height: user.height,
                 fitness_level: user.profile.fitnessLevel,
                 fitness_goals: user.profile.fitnessGoals,
                 medical_issues: user.profile.medicalIssues,
@@ -254,15 +254,22 @@ function createUserServiceHandler({
         });
       }
 
+      // Update user fields (age, weight, height)
+      const updatedUser = await prisma.user.update({
+        where: { id: user_id },
+        data: {
+          age: profile_data.age ?? undefined,
+          weight: profile_data.weight ?? undefined,
+          height: profile_data.height ?? undefined,
+        },
+      });
+
       // Update or create profile
       const updatedProfile = await prisma.profile.upsert({
         where: {
           userId: user_id,
         },
         update: {
-          age: profile_data.age ?? undefined,
-          weight: profile_data.weight ?? undefined,
-          height: profile_data.height ?? undefined,
           fitnessLevel: profile_data.fitness_level ?? undefined,
           fitnessGoals: profile_data.fitness_goals ?? undefined,
           medicalIssues: profile_data.medical_issues ?? undefined,
@@ -273,9 +280,6 @@ function createUserServiceHandler({
         },
         create: {
           userId: user_id,
-          age: profile_data.age,
-          weight: profile_data.weight,
-          height: profile_data.height,
           fitnessLevel: profile_data.fitness_level,
           fitnessGoals: profile_data.fitness_goals,
           medicalIssues: profile_data.medical_issues,
@@ -284,9 +288,6 @@ function createUserServiceHandler({
             ? JSON.parse(profile_data.training_preferences)
             : undefined,
         },
-        include: {
-          user: true,
-        },
       });
 
       // Return updated profile
@@ -294,17 +295,17 @@ function createUserServiceHandler({
         callback,
         data: {
           user: {
-            id: updatedProfile.user.id,
-            email: updatedProfile.user.email,
-            first_name: updatedProfile.user.firstName,
-            last_name: updatedProfile.user.lastName,
-            created_at: updatedProfile.user.createdAt.toISOString(),
-            updated_at: updatedProfile.user.updatedAt.toISOString(),
+            id: updatedUser.id,
+            email: updatedUser.email,
+            first_name: updatedUser.firstName,
+            last_name: updatedUser.lastName,
+            created_at: updatedUser.createdAt.toISOString(),
+            updated_at: updatedUser.updatedAt.toISOString(),
           },
           profile: {
-            age: updatedProfile.age,
-            weight: updatedProfile.weight,
-            height: updatedProfile.height,
+            age: updatedUser.age,
+            weight: updatedUser.weight,
+            height: updatedUser.height,
             fitness_level: updatedProfile.fitnessLevel,
             fitness_goals: updatedProfile.fitnessGoals,
             medical_issues: updatedProfile.medicalIssues,

@@ -17,12 +17,12 @@ exports.Prisma = Prisma
 exports.$Enums = {}
 
 /**
- * Prisma Client JS version: 5.22.0
- * Query Engine version: 605197351a3c8bdd595af2d2a9bc3025bca48ea2
+ * Prisma Client JS version: 6.6.0
+ * Query Engine version: f676762280b54cd07c770017ed3711ddde35f37a
  */
 Prisma.prismaVersion = {
-  client: "5.22.0",
-  engine: "605197351a3c8bdd595af2d2a9bc3025bca48ea2"
+  client: "6.6.0",
+  engine: "f676762280b54cd07c770017ed3711ddde35f37a"
 }
 
 Prisma.PrismaClientKnownRequestError = () => {
@@ -48,11 +48,6 @@ In case this error is unexpected for you, please report it in https://pris.ly/pr
 Prisma.PrismaClientValidationError = () => {
   const runtimeName = getRuntime().prettyName;
   throw new Error(`PrismaClientValidationError is unable to run in this browser environment, or has been bundled for the browser (running in ${runtimeName}).
-In case this error is unexpected for you, please report it in https://pris.ly/prisma-prisma-bug-report`,
-)}
-Prisma.NotFoundError = () => {
-  const runtimeName = getRuntime().prettyName;
-  throw new Error(`NotFoundError is unable to run in this browser environment, or has been bundled for the browser (running in ${runtimeName}).
 In case this error is unexpected for you, please report it in https://pris.ly/prisma-prisma-bug-report`,
 )}
 Prisma.Decimal = Decimal
@@ -128,6 +123,11 @@ exports.Prisma.UserScalarFieldEnum = {
   password: 'password',
   firstName: 'firstName',
   lastName: 'lastName',
+  age: 'age',
+  weight: 'weight',
+  height: 'height',
+  experience: 'experience',
+  availability: 'availability',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 };
@@ -135,9 +135,6 @@ exports.Prisma.UserScalarFieldEnum = {
 exports.Prisma.ProfileScalarFieldEnum = {
   id: 'id',
   userId: 'userId',
-  age: 'age',
-  weight: 'weight',
-  height: 'height',
   fitnessLevel: 'fitnessLevel',
   fitnessGoals: 'fitnessGoals',
   medicalIssues: 'medicalIssues',
@@ -147,7 +144,7 @@ exports.Prisma.ProfileScalarFieldEnum = {
   updatedAt: 'updatedAt'
 };
 
-exports.Prisma.TrainingScalarFieldEnum = {
+exports.Prisma.TrainingPlanScalarFieldEnum = {
   id: 'id',
   userId: 'userId',
   name: 'name',
@@ -158,17 +155,31 @@ exports.Prisma.TrainingScalarFieldEnum = {
   generatedBy: 'generatedBy'
 };
 
-exports.Prisma.ExerciseScalarFieldEnum = {
+exports.Prisma.TrainingSessionScalarFieldEnum = {
   id: 'id',
-  trainingId: 'trainingId',
-  name: 'name',
-  description: 'description',
+  trainingPlanId: 'trainingPlanId',
+  userId: 'userId',
+  dayOfWeek: 'dayOfWeek',
+  feedback: 'feedback',
+  completed: 'completed',
+  scheduledDate: 'scheduledDate',
+  completedDate: 'completedDate',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.ExerciseLogScalarFieldEnum = {
+  id: 'id',
+  trainingSessionId: 'trainingSessionId',
+  userId: 'userId',
+  exerciseName: 'exerciseName',
   sets: 'sets',
   reps: 'reps',
-  restTime: 'restTime',
-  notes: 'notes',
-  dayOfWeek: 'dayOfWeek',
-  order: 'order'
+  weight: 'weight',
+  rir: 'rir',
+  feedback: 'feedback',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
 };
 
 exports.Prisma.SortOrder = {
@@ -201,8 +212,9 @@ exports.Prisma.NullsOrder = {
 exports.Prisma.ModelName = {
   User: 'User',
   Profile: 'Profile',
-  Training: 'Training',
-  Exercise: 'Exercise'
+  TrainingPlan: 'TrainingPlan',
+  TrainingSession: 'TrainingSession',
+  ExerciseLog: 'ExerciseLog'
 };
 
 /**
@@ -222,7 +234,7 @@ class PrismaClient {
         } else {
           message = 'PrismaClient is unable to run in this browser environment, or has been bundled for the browser (running in `' + runtime.prettyName + '`).'
         }
-        
+
         message += `
 If this is unexpected, please open an issue: https://pris.ly/prisma-prisma-bug-report`
 

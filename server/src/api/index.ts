@@ -1,6 +1,6 @@
 import { FastifyPluginAsync } from 'fastify';
-import userRoutes from '../domain/users/routes';
-import trainingRoutes from '../domain/trainings/routes';
+// import userRoutes from '../domain/users/routes';
+// import trainingRoutes from '../domain/trainings/routes';
 import aiRoutes from '../domain/ai/routes';
 
 const api: FastifyPluginAsync = async (fastify, options) => {
@@ -10,8 +10,8 @@ const api: FastifyPluginAsync = async (fastify, options) => {
   });
 
   // Register domain routes
-  fastify.register(userRoutes, { prefix: '/users' });
-  fastify.register(trainingRoutes, { prefix: '/trainings' });
+  // fastify.register(userRoutes, { prefix: '/users' });
+  // fastify.register(trainingRoutes, { prefix: '/trainings' });
   fastify.register(aiRoutes, { prefix: '/ai' });
 };
 

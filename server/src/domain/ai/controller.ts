@@ -154,44 +154,71 @@ async function saveTrainingPlan(
   params: GenerateTrainingRequest,
   trainingData: any
 ): Promise<TrainingPlan> {
-  const training = await prisma.training.create({
+  // First create the training plan
+  const training = await prisma.trainingPlan.create({
     data: {
       userId,
       name: params.name,
       description: params.description || '',
       generatedBy: 'gpt-4',
-      exercises: {
-        create: trainingData.exercises.map((exercise: any, index: number) => ({
-          name: exercise.name,
-          description: exercise.description || '',
-          sets: exercise.sets,
-          reps: exercise.reps,
-          restTime: exercise.restTime,
-          notes: exercise.notes || '',
-          dayOfWeek: exercise.dayOfWeek,
-          order: exercise.order || index + 1,
+      trainingSessions: {
+        create: Array.from({ length: params.daysPerWeek }, (_, i) => ({
+          userId,
+          dayOfWeek: i + 1, // 1-7 representing Monday-Sunday
+          completed: false,
         })),
       },
     },
     include: {
-      exercises: true,
+      trainingSessions: true,
     },
   });
 
+  // Create exercise logs for each exercise
+  const exercisePromises = trainingData.exercises.map(async (exercise: any) => {
+    // Find the training session for this day of the week
+    const session = training.trainingSessions.find(
+      (s) => s.dayOfWeek === exercise.dayOfWeek
+    );
+
+    if (!session) return null;
+
+    // Create the exercise log
+    return prisma.exerciseLog.create({
+      data: {
+        userId,
+        trainingSessionId: session.id,
+        exerciseName: exercise.name,
+        sets: exercise.sets,
+        reps: exercise.reps,
+        feedback: exercise.notes || '',
+        weight: null,
+        rir: null,
+      },
+      include: {
+        trainingSession: true,
+      },
+    });
+  });
+
+  // Wait for all exercise logs to be created
+  const exerciseLogs = await Promise.all(exercisePromises);
+
+  // Map the data to the response format
   return {
     id: training.id,
     userId: training.userId,
     name: training.name,
     description: training.description || undefined,
-    exercises: training.exercises.map((exercise) => ({
-      name: exercise.name,
-      description: exercise.description || '',
-      sets: exercise.sets,
-      reps: exercise.reps,
-      restTime: exercise.restTime || undefined,
-      notes: exercise.notes || undefined,
-      dayOfWeek: exercise.dayOfWeek,
-      order: exercise.order,
+    exercises: exerciseLogs.filter(Boolean).map((log) => ({
+      name: log.exerciseName,
+      description: log.feedback || '',
+      sets: log.sets,
+      reps: log.reps,
+      restTime: 60, // Default rest time in seconds
+      notes: log.feedback || undefined,
+      dayOfWeek: log.trainingSession?.dayOfWeek || 1,
+      order: 1, // Default order
     })),
   };
 }

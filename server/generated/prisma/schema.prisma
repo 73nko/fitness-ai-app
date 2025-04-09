@@ -16,15 +16,24 @@ datasource db {
 
 // User model
 model User {
-  id        String     @id @default(uuid())
-  email     String     @unique
-  password  String
-  firstName String
-  lastName  String
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
-  profile   Profile?
-  trainings Training[]
+  id               String            @id @default(uuid())
+  email            String            @unique
+  password         String
+  firstName        String
+  lastName         String
+  age              Int?
+  weight           Float?
+  height           Float?
+  experience       String? // beginner, intermediate, advanced
+  availability     Json? // Weekly availability in a structured format
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  profile          Profile?
+  trainingPlans    TrainingPlan[]
+  trainingSessions TrainingSession[]
+  exerciseLogs     ExerciseLog[]
+
+  @@index([email])
 }
 
 // User profile with fitness data
@@ -32,9 +41,6 @@ model Profile {
   id                  String   @id @default(uuid())
   userId              String   @unique
   user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  age                 Int?
-  weight              Float?
-  height              Float?
   fitnessLevel        String? // beginner, intermediate, advanced
   fitnessGoals        String[] // ["lose_weight", "build_muscle", etc.]
   medicalIssues       String[]
@@ -42,33 +48,62 @@ model Profile {
   trainingPreferences Json?
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
+
+  @@index([userId])
 }
 
-// Training plans
-model Training {
-  id          String     @id @default(uuid())
-  userId      String
-  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  name        String
-  description String?
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
-  isActive    Boolean    @default(true)
-  generatedBy String     @default("gpt-4") // AI model that generated the plan
-  exercises   Exercise[]
+// Training Plan model
+model TrainingPlan {
+  id               String            @id @default(uuid())
+  userId           String
+  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name             String
+  description      String?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  isActive         Boolean           @default(true)
+  generatedBy      String            @default("gpt-4") // AI model that generated the plan
+  trainingSessions TrainingSession[]
+
+  @@index([userId])
 }
 
-// Exercise model
-model Exercise {
-  id          String   @id @default(uuid())
-  trainingId  String
-  training    Training @relation(fields: [trainingId], references: [id], onDelete: Cascade)
-  name        String
-  description String?
-  sets        Int
-  reps        String // can be a range like "8-12" or specific like "10"
-  restTime    Int? // rest time in seconds
-  notes       String?
-  dayOfWeek   Int // 1-7 representing Monday-Sunday
-  order       Int // order within the day
+// Training Session model
+model TrainingSession {
+  id             String        @id @default(uuid())
+  trainingPlanId String
+  trainingPlan   TrainingPlan  @relation(fields: [trainingPlanId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  dayOfWeek      Int // 1-7 representing Monday-Sunday
+  feedback       String? // General feedback for the session
+  completed      Boolean       @default(false)
+  scheduledDate  DateTime?
+  completedDate  DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  exerciseLogs   ExerciseLog[]
+
+  @@index([trainingPlanId])
+  @@index([userId])
+}
+
+// Exercise Log model
+model ExerciseLog {
+  id                String          @id @default(uuid())
+  trainingSessionId String
+  trainingSession   TrainingSession @relation(fields: [trainingSessionId], references: [id], onDelete: Cascade)
+  userId            String
+  user              User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  exerciseName      String
+  sets              Int
+  reps              String // Can be a range like "8-12" or specific like "10"
+  weight            Float?
+  rir               Int? // Rate of Perceived Exertion (RPE) or Reps In Reserve (RIR)
+  feedback          String? // User's feelings/feedback on the exercise
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  @@index([trainingSessionId])
+  @@index([userId])
 }
