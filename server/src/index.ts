@@ -44,6 +44,14 @@ async function registerPlugins() {
   const apiRoutes = await import('./api/index');
   await server.register(apiRoutes.default, { prefix: '/api' });
 
+  // Register gRPC server plugin
+  const grpcServerPlugin = await import('./plugins/grpc-server');
+  await server.register(grpcServerPlugin.default);
+
+  // Register AI gRPC service
+  const aiGrpcService = await import('./domain/grpc/ai');
+  await server.register(aiGrpcService.default);
+
   // Swagger documentation
   await server.register(require('fastify-swagger'), {
     routePrefix: '/documentation',
@@ -82,10 +90,6 @@ async function start() {
       typeof address === 'string' ? address : address?.port || '3000';
 
     server.log.info(`Server listening on ${port}`);
-
-    // Start gRPC server
-    const { setupGrpcServer } = await import('./services/grpc');
-    await setupGrpcServer(prisma);
   } catch (err) {
     server.log.error(err);
     process.exit(1);

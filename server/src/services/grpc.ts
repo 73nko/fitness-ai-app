@@ -3,12 +3,13 @@ import * as protoLoader from '@grpc/proto-loader';
 import path from 'path';
 import { PrismaClient } from '../../generated/prisma';
 import { config } from '../config/index';
+import OpenAI from 'openai';
 
 // Import domain handlers
 import createUserServiceHandler from '../domain/grpc/user/userHandler';
+import { aiHandler } from '../domain/grpc/ai/aiHandler';
 // Other domain handlers will be imported similarly as they're implemented
 // import createTrainingServiceHandler from '../domain/grpc/training/trainingHandler';
-// import createAIServiceHandler from '../domain/grpc/ai/aiHandler';
 
 interface GrpcServiceDependencies {
   prisma: PrismaClient;
@@ -75,8 +76,7 @@ export function initGrpcServer({
   server.addService(trainingProto.TrainingService.service, trainingHandler);
   */
 
-  // AI service will be loaded similarly
-  /*
+  // AI service implementation
   const aiPackageDefinition = protoLoader.loadSync(aiProtoPath, {
     keepCase: true,
     longs: String,
@@ -87,13 +87,20 @@ export function initGrpcServer({
 
   const aiProto = grpc.loadPackageDefinition(aiPackageDefinition).ai as any;
 
-  const aiHandler = createAIServiceHandler({
-    prisma,
-    openai: openaiClient,
+  // Create OpenAI client
+  const openaiClient = new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY,
   });
 
-  server.addService(aiProto.AIService.service, aiHandler);
-  */
+  // Pass both Prisma and OpenAI clients to the AI handler
+  const aiServiceHandler = aiHandler({
+    prisma,
+    openai: openaiClient,
+    log: console,
+  });
+
+  // Convertir el manejador a tipo 'any' para evitar problemas de tipado
+  server.addService(aiProto.AIService.service, aiServiceHandler as any);
 
   return server;
 }
