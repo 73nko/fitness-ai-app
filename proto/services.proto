@@ -1,0 +1,127 @@
+syntax = "proto3";
+
+package fitness;
+
+// User service for account management
+service UserService {
+  rpc GetUserProfile(UserIdRequest) returns (UserProfileResponse);
+  rpc CreateUserProfile(CreateUserRequest) returns (UserProfileResponse);
+  rpc UpdateUserProfile(UpdateUserRequest) returns (UserProfileResponse);
+  rpc AuthenticateUser(LoginRequest) returns (AuthResponse);
+}
+
+// Training service for workout plans
+service TrainingService {
+  rpc GetTrainingPlan(TrainingIdRequest) returns (TrainingPlanResponse);
+  rpc GenerateTrainingPlan(TrainingPlanRequest) returns (TrainingPlanResponse);
+  rpc UpdateTrainingPlan(UpdateTrainingRequest) returns (TrainingPlanResponse);
+  rpc ListUserTrainingPlans(UserIdRequest) returns (TrainingPlansListResponse);
+}
+
+// User related messages
+message UserIdRequest {
+  string userId = 1;
+}
+
+message CreateUserRequest {
+  string email = 1;
+  string password = 2;
+  string firstName = 3;
+  string lastName = 4;
+  ProfileData profileData = 5;
+}
+
+message UpdateUserRequest {
+  string userId = 1;
+  string firstName = 2;
+  string lastName = 3;
+  ProfileData profileData = 4;
+}
+
+message LoginRequest {
+  string email = 1;
+  string password = 2;
+}
+
+message AuthResponse {
+  string token = 1;
+  UserProfile user = 2;
+}
+
+message UserProfileResponse {
+  string id = 1;
+  string email = 2;
+  string firstName = 3;
+  string lastName = 4;
+  ProfileData profile = 5;
+}
+
+message ProfileData {
+  int32 age = 1;
+  float weight = 2;
+  float height = 3;
+  string fitnessLevel = 4;
+  repeated string fitnessGoals = 5;
+  repeated string medicalIssues = 6;
+  repeated string availableEquipment = 7;
+  string trainingPreferences = 8; // JSON string
+}
+
+message UserProfile {
+  string id = 1;
+  string email = 2;
+  string firstName = 3;
+  string lastName = 4;
+}
+
+// Training related messages
+message TrainingIdRequest {
+  string trainingId = 1;
+}
+
+message TrainingPlanRequest {
+  string userId = 1;
+  string name = 2;
+  string description = 3;
+  int32 daysPerWeek = 4;
+  string focusArea = 5;
+  int32 sessionDuration = 6;
+  bool includeWarmup = 7;
+  bool includeCooldown = 8;
+}
+
+message UpdateTrainingRequest {
+  string trainingId = 1;
+  string name = 2;
+  string description = 3;
+  bool isActive = 4;
+  repeated ExerciseData exercises = 5;
+}
+
+message TrainingPlanResponse {
+  string id = 1;
+  string userId = 2;
+  string name = 3;
+  string description = 4;
+  string createdAt = 5;
+  string updatedAt = 6;
+  bool isActive = 7;
+  string generatedBy = 8;
+  repeated ExerciseData exercises = 9;
+}
+
+message TrainingPlansListResponse {
+  repeated TrainingPlanResponse trainings = 1;
+}
+
+message ExerciseData {
+  string id = 1;
+  string name = 2;
+  string description = 3;
+  int32 sets = 4;
+  string reps = 5;
+  int32 restTime = 6;
+  string notes = 7;
+  int32 dayOfWeek = 8;
+  int32 order = 9;
+}

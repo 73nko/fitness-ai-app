@@ -1,0 +1,129 @@
+syntax = "proto3";
+
+package training;
+
+service TrainingService {
+  // Generate a training plan
+  rpc GenerateTrainingPlan(GeneratePlanRequest) returns (TrainingPlanResponse);
+
+  // Get training plan details
+  rpc GetTrainingPlan(TrainingPlanRequest) returns (TrainingPlanResponse);
+
+  // Record workout performance
+  rpc RecordWorkout(WorkoutRecordRequest) returns (WorkoutRecordResponse);
+
+  // Get user progress
+  rpc GetUserProgress(ProgressRequest) returns (ProgressResponse);
+}
+
+// Generate plan request
+message GeneratePlanRequest {
+  string user_id = 1;
+  optional string plan_name = 2;
+  optional string description = 3;
+}
+
+// Training plan request
+message TrainingPlanRequest {
+  string training_id = 1;
+}
+
+// Training plan response
+message TrainingPlanResponse {
+  TrainingPlan training_plan = 1;
+}
+
+// Workout record request
+message WorkoutRecordRequest {
+  string user_id = 1;
+  string training_id = 2;
+  int32 day_of_week = 3;
+  repeated ExerciseRecord exercise_records = 4;
+  string workout_date = 5;
+  optional string notes = 6;
+}
+
+// Workout record response
+message WorkoutRecordResponse {
+  string record_id = 1;
+  string user_id = 2;
+  string training_id = 3;
+  string workout_date = 4;
+  repeated ExerciseRecord exercise_records = 5;
+  optional string notes = 6;
+}
+
+// Progress request
+message ProgressRequest {
+  string user_id = 1;
+  optional string training_id = 2;
+  optional string start_date = 3;
+  optional string end_date = 4;
+}
+
+// Progress response
+message ProgressResponse {
+  string user_id = 1;
+  repeated WorkoutSummary workouts = 2;
+  repeated ExerciseProgress exercise_progress = 3;
+}
+
+// Training plan
+message TrainingPlan {
+  string id = 1;
+  string user_id = 2;
+  string name = 3;
+  optional string description = 4;
+  string created_at = 5;
+  string updated_at = 6;
+  bool is_active = 7;
+  string generated_by = 8;
+  repeated Exercise exercises = 9;
+}
+
+// Exercise
+message Exercise {
+  string id = 1;
+  string name = 2;
+  optional string description = 3;
+  int32 sets = 4;
+  string reps = 5;  // Can be a range like "8-12" or specific like "10"
+  optional int32 rest_time = 6;  // Rest time in seconds
+  optional string notes = 7;
+  int32 day_of_week = 8;  // 1-7 representing Monday-Sunday
+  int32 order = 9;  // Order within the day
+}
+
+// Exercise record
+message ExerciseRecord {
+  string exercise_id = 1;
+  string exercise_name = 2;
+  int32 completed_sets = 3;
+  repeated string completed_reps = 4; // Array of reps for each set, e.g. ["10", "8", "6"]
+  optional float weight = 5;  // Weight used (if applicable)
+  optional string notes = 6;
+}
+
+// Workout summary
+message WorkoutSummary {
+  string workout_date = 1;
+  int32 day_of_week = 2;
+  int32 total_exercises = 3;
+  int32 total_sets = 4;
+  optional string notes = 5;
+}
+
+// Exercise progress
+message ExerciseProgress {
+  string exercise_id = 1;
+  string exercise_name = 2;
+  repeated ProgressPoint progress_points = 3;
+}
+
+// Progress point
+message ProgressPoint {
+  string date = 1;
+  optional float weight = 2;
+  optional int32 total_sets = 3;
+  optional int32 total_reps = 4;
+}

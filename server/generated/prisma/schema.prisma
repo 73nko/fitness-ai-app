@@ -1,0 +1,74 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User model
+model User {
+  id        String     @id @default(uuid())
+  email     String     @unique
+  password  String
+  firstName String
+  lastName  String
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  profile   Profile?
+  trainings Training[]
+}
+
+// User profile with fitness data
+model Profile {
+  id                  String   @id @default(uuid())
+  userId              String   @unique
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  age                 Int?
+  weight              Float?
+  height              Float?
+  fitnessLevel        String? // beginner, intermediate, advanced
+  fitnessGoals        String[] // ["lose_weight", "build_muscle", etc.]
+  medicalIssues       String[]
+  availableEquipment  String[]
+  trainingPreferences Json?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+}
+
+// Training plans
+model Training {
+  id          String     @id @default(uuid())
+  userId      String
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  isActive    Boolean    @default(true)
+  generatedBy String     @default("gpt-4") // AI model that generated the plan
+  exercises   Exercise[]
+}
+
+// Exercise model
+model Exercise {
+  id          String   @id @default(uuid())
+  trainingId  String
+  training    Training @relation(fields: [trainingId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  sets        Int
+  reps        String // can be a range like "8-12" or specific like "10"
+  restTime    Int? // rest time in seconds
+  notes       String?
+  dayOfWeek   Int // 1-7 representing Monday-Sunday
+  order       Int // order within the day
+}

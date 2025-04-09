@@ -1,0 +1,106 @@
+syntax = "proto3";
+
+package ai;
+
+service AIService {
+  // Generate training feedback based on user progress
+  rpc GenerateFeedback(FeedbackRequest) returns (FeedbackResponse);
+
+  // Generate workout recommendations
+  rpc GenerateRecommendations(RecommendationRequest) returns (RecommendationResponse);
+
+  // Analyze user progress
+  rpc AnalyzeProgress(ProgressAnalysisRequest) returns (ProgressAnalysisResponse);
+}
+
+// Feedback request
+message FeedbackRequest {
+  string user_id = 1;
+  optional string training_id = 2;
+  optional string start_date = 3;
+  optional string end_date = 4;
+}
+
+// Feedback response
+message FeedbackResponse {
+  string user_id = 1;
+  string feedback = 2;
+  repeated ExerciseFeedback exercise_feedback = 3;
+  string generated_at = 4;
+  string model_used = 5;
+}
+
+// Exercise feedback
+message ExerciseFeedback {
+  string exercise_id = 1;
+  string exercise_name = 2;
+  string feedback = 3;
+  optional string suggestion = 4;
+}
+
+// Recommendation request
+message RecommendationRequest {
+  string user_id = 1;
+  optional string training_id = 2;
+  optional string focus_area = 3;
+}
+
+// Recommendation response
+message RecommendationResponse {
+  string user_id = 1;
+  repeated ExerciseRecommendation recommendations = 2;
+  string generated_at = 3;
+  string model_used = 4;
+}
+
+// Exercise recommendation
+message ExerciseRecommendation {
+  string exercise_name = 1;
+  string description = 2;
+  string benefit = 3;
+  optional string video_url = 4;
+  optional string image_url = 5;
+  int32 recommended_sets = 6;
+  string recommended_reps = 7;
+  int32 recommended_rest = 8;
+}
+
+// Progress analysis request
+message ProgressAnalysisRequest {
+  string user_id = 1;
+  optional string training_id = 2;
+  optional string start_date = 3;
+  optional string end_date = 4;
+}
+
+// Progress analysis response
+message ProgressAnalysisResponse {
+  string user_id = 1;
+  string overall_analysis = 2;
+  repeated StrengthAreaAnalysis strength_areas = 3;
+  repeated WeaknessAreaAnalysis weakness_areas = 4;
+  repeated ActionItem action_items = 5;
+  string generated_at = 6;
+  string model_used = 7;
+}
+
+// Strength area analysis
+message StrengthAreaAnalysis {
+  string area = 1;
+  string description = 2;
+  float improvement_percentage = 3;
+}
+
+// Weakness area analysis
+message WeaknessAreaAnalysis {
+  string area = 1;
+  string description = 2;
+  optional string suggestion = 3;
+}
+
+// Action item
+message ActionItem {
+  string description = 1;
+  string reason = 2;
+  int32 priority = 3; // 1-5 scale, 5 being highest priority
+}

@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package fitness;
+
+// Import service definitions
+import "user/user.proto";
+import "training/training.proto";
+import "ai/ai.proto";
+
+// This is a combined service definition file that imports all individual service protos
+// The actual service implementations are in their respective proto files
+// This file only serves as an import reference for applications that need all services
+
+// services.proto is primarily used as an import reference for gRPC clients
+// that need access to all services defined in the fitness application

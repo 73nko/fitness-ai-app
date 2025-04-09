@@ -1,0 +1,88 @@
+syntax = "proto3";
+
+package user;
+
+service UserService {
+  // Register a new user
+  rpc Register(RegisterRequest) returns (UserResponse);
+
+  // Login user
+  rpc Login(LoginRequest) returns (LoginResponse);
+
+  // Get user profile
+  rpc GetProfile(ProfileRequest) returns (ProfileResponse);
+
+  // Update user profile
+  rpc UpdateProfile(UpdateProfileRequest) returns (ProfileResponse);
+}
+
+// Register request
+message RegisterRequest {
+  string email = 1;
+  string password = 2;
+  string first_name = 3;
+  string last_name = 4;
+  optional ProfileData profile_data = 5;
+}
+
+// Login request
+message LoginRequest {
+  string email = 1;
+  string password = 2;
+}
+
+// Login response
+message LoginResponse {
+  string token = 1;
+  UserData user = 2;
+}
+
+// Profile request
+message ProfileRequest {
+  string user_id = 1;
+}
+
+// Update profile request
+message UpdateProfileRequest {
+  string user_id = 1;
+  ProfileData profile_data = 2;
+}
+
+// User response
+message UserResponse {
+  string id = 1;
+  string email = 2;
+  string first_name = 3;
+  string last_name = 4;
+  optional ProfileData profile = 5;
+}
+
+// Profile response
+message ProfileResponse {
+  UserData user = 1;
+  ProfileData profile = 2;
+}
+
+// User data
+message UserData {
+  string id = 1;
+  string email = 2;
+  string first_name = 3;
+  string last_name = 4;
+  string created_at = 5;
+  string updated_at = 6;
+}
+
+// Profile data
+message ProfileData {
+  optional int32 age = 1;
+  optional float weight = 2;
+  optional float height = 3;
+  optional string fitness_level = 4;
+  repeated string fitness_goals = 5;
+  repeated string medical_issues = 6;
+  repeated string available_equipment = 7;
+  optional string training_preferences = 8; // JSON string
+  string created_at = 9;
+  string updated_at = 10;
+}
