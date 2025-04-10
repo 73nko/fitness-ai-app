@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   RefreshControl,
   SafeAreaView,
+  Alert,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -82,36 +83,72 @@ export default function ProgressScreen() {
   // Fetch data from API
   const fetchExerciseLogs = useCallback(
     async (isRefresh = false) => {
-      if (!user) return;
+      if (!user) {
+        setError('User not authenticated');
+        setIsLoading(false);
+        return;
+      }
 
       try {
-        if (!isRefresh) setIsLoading(true);
+        if (!isRefresh) {
+          setIsLoading(true);
+        }
         setError(null);
 
         const request: GetUserExerciseLogsRequest = {
           user_id: user.id,
-          days: 365, // Get all data and filter client-side
+          days: selectedDays,
+          exercise_name: selectedExercise || undefined,
         };
 
-        const response = await grpcClient.trainingService.getUserExerciseLogs(
-          request
-        );
-        setExerciseLogs(response.logs);
+        const response =
+          await grpcClient.trainingService.getUserExerciseLogs(request);
+
+        if (response.logs.length === 0 && selectedExercise) {
+          // If filtering by exercise and no logs found, try fetching all logs instead
+          const allLogsRequest: GetUserExerciseLogsRequest = {
+            user_id: user.id,
+            days: selectedDays,
+          };
+          const allResponse =
+            await grpcClient.trainingService.getUserExerciseLogs(
+              allLogsRequest
+            );
+          setExerciseLogs(allResponse.logs);
+        } else {
+          setExerciseLogs(response.logs);
+        }
       } catch (err: any) {
         setError(err.message || 'Failed to load exercise data');
         console.error('Error fetching exercise logs:', err);
+
+        Alert.alert(
+          'Error Loading Data',
+          err.message ||
+            'Failed to load exercise data. Please try again later.',
+          [{ text: 'OK' }]
+        );
       } finally {
         setIsLoading(false);
-        if (isRefresh) setIsRefreshing(false);
+        if (isRefresh) {
+          setIsRefreshing(false);
+        }
       }
     },
-    [user]
+    [user, selectedDays, selectedExercise]
   );
 
   // Initial data load
   useEffect(() => {
     fetchExerciseLogs();
   }, [fetchExerciseLogs]);
+
+  // Refetch when time range or exercise changes
+  useEffect(() => {
+    if (!isLoading) {
+      fetchExerciseLogs();
+    }
+  }, [selectedDays, selectedExercise, fetchExerciseLogs, isLoading]);
 
   // Handle pull-to-refresh
   const handleRefresh = useCallback(() => {
