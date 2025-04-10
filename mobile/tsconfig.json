@@ -1,0 +1,40 @@
+{
+    "extends": "@tsconfig/react-native/tsconfig.json",
+    "compilerOptions": {
+        "strict": true,
+        "baseUrl": ".",
+        "paths": {
+            "@/*": [
+                "src/*"
+            ]
+        },
+        "jsx": "react-native",
+        "lib": [
+            "es2017",
+            "dom"
+        ],
+        "skipLibCheck": true,
+        "resolveJsonModule": true,
+        "typeRoots": [
+            "node_modules/@types",
+            "./node_modules/react-native/types",
+            "./src"
+        ],
+        "types": [
+            "react",
+        ]
+    },
+    "include": [
+        "src",
+        "**/*.ts",
+        "**/*.tsx",
+        "app.d.ts",
+        "src/types.d.ts",
+        "nativewind-env.d.ts"
+    ],
+    "exclude": [
+        "node_modules",
+        "babel.config.js",
+        "metro.config.js"
+    ]
+}

@@ -1,238 +1,121 @@
 # Fitness AI Mobile App
 
-Este es el cliente móvil para la aplicación de entrenamiento personalizado con IA.
+React Native mobile application for the Fitness AI training system. This app allows users to view and manage their workout plans, track progress, and get AI-generated training suggestions.
 
-## Requisitos
+## Features
 
-- Node.js >= 14
-- React Native CLI
-- Cocoapods (para iOS)
-- Android Studio (para Android)
-- Xcode (para iOS)
+- User authentication (login/logout)
+- View and manage training plans
+- Track workout sessions
+- Submit session feedback
+- Get AI-generated training suggestions
 
-## Instalación
+## Tech Stack
+
+- React Native with Expo
+- TypeScript
+- React Navigation
+- NativeWind (Tailwind CSS for React Native)
+- gRPC-Web for API communication
+- Zustand for state management
+
+## Getting Started
+
+### Prerequisites
+
+- Node.js 16+
+- npm or yarn
+- Android Studio / Xcode for emulators
+- Optional: Physical device for testing
+
+### Installation
+
+1. Install dependencies:
 
 ```bash
-# Instalar dependencias
+cd mobile
 npm install
-
-# Para iOS
-cd ios && pod install && cd ..
-
-# Para Android
-# No se requieren pasos adicionales
 ```
 
-## Ejecución
+2. Set up environment variables:
 
 ```bash
-# iOS
-npm run ios
-
-# Android
-npm run android
+cp .env.example .env
 ```
 
-## Estructura del Proyecto
+Edit the `.env` file with your configuration.
+
+### Running in Development
+
+#### Using Expo
+
+Start the development server:
+
+```bash
+npm start
+```
+
+This will open the Expo developer tools. You can:
+- Press 'a' to open on Android emulator
+- Press 'i' to open on iOS simulator
+- Scan the QR code with Expo Go on your physical device
+
+#### Using Docker
+
+From the project root directory:
+
+```bash
+docker-compose up mobile
+```
+
+### Building for Production
+
+#### Android
+
+```bash
+npm run android:build
+```
+
+#### iOS
+
+```bash
+npm run ios:build
+```
+
+## Project Structure
 
 ```
 mobile/
-├── android/          # Configuración específica de Android
-├── ios/              # Configuración específica de iOS
-├── src/              # Código fuente
-│   ├── api/          # Clientes gRPC y API
-│   ├── components/   # Componentes reutilizables
-│   ├── screens/      # Pantallas de la aplicación
-│   ├── navigation/   # Configuración de navegación
-│   ├── store/        # Estado global (Redux o similar)
-│   ├── theme/        # Estilos y tema
-│   └── utils/        # Utilidades y helpers
-└── App.tsx           # Punto de entrada
+├── src/
+│   ├── App.tsx              # Entry point for the app
+│   ├── navigation/          # Navigation setup
+│   │   └── index.tsx        # Main navigator
+│   ├── screens/             # App screens
+│   │   ├── HomeScreen.tsx   # Home screen
+│   │   └── ProfileScreen.tsx # Profile screen
+│   ├── services/            # API services
+│   │   └── grpcClient.ts    # gRPC client
+│   ├── context/             # Context providers
+│   │   └── AuthContext.tsx  # Authentication context
+│   ├── components/          # Reusable components
+│   └── config/              # Configuration
+│       └── env.ts           # Environment config
+├── assets/                  # App assets
+├── .env                     # Environment variables
+├── .env.example             # Example environment variables
+├── tsconfig.json            # TypeScript configuration
+├── babel.config.js          # Babel configuration
+├── metro.config.js          # Metro bundler configuration
+└── package.json             # Dependencies
 ```
 
-## Configuración de gRPC
+## Connecting to the Backend
 
-Para trabajar con gRPC en React Native, utilizaremos la librería `@grpc/grpc-js` en combinación con un proxy web para la comunicación desde el dispositivo móvil.
+This app is configured to connect to a gRPC backend. By default, it will try to connect to `http://localhost:8080`, but you can customize this by setting the `GRPC_ENDPOINT` environment variable in your `.env` file.
 
-### Ejemplos de llamadas gRPC
+## Contributing
 
-#### Autenticación de Usuario
-
-```typescript
-// src/api/auth.ts
-import { credentials } from '@grpc/grpc-js';
-import { UserServiceClient } from '../generated/fitness_grpc_pb';
-import { LoginRequest } from '../generated/fitness_pb';
-
-// Crear cliente gRPC
-const client = new UserServiceClient(
-  'your-server-address:50051',
-  credentials.createInsecure()
-);
-
-export const login = (email: string, password: string): Promise<any> => {
-  return new Promise((resolve, reject) => {
-    const request = new LoginRequest();
-    request.setEmail(email);
-    request.setPassword(password);
-
-    client.authenticateUser(request, (err, response) => {
-      if (err) {
-        reject(err);
-        return;
-      }
-
-      const token = response.getToken();
-      const user = response.getUser();
-
-      resolve({
-        token,
-        user: {
-          id: user.getId(),
-          email: user.getEmail(),
-          firstName: user.getFirstName(),
-          lastName: user.getLastName(),
-        }
-      });
-    });
-  });
-};
-```
-
-#### Obtener Perfil de Usuario
-
-```typescript
-// src/api/user.ts
-import { credentials } from '@grpc/grpc-js';
-import { UserServiceClient } from '../generated/fitness_grpc_pb';
-import { UserIdRequest } from '../generated/fitness_pb';
-
-// Crear cliente gRPC
-const client = new UserServiceClient(
-  'your-server-address:50051',
-  credentials.createInsecure()
-);
-
-export const getUserProfile = (userId: string): Promise<any> => {
-  return new Promise((resolve, reject) => {
-    const request = new UserIdRequest();
-    request.setUserId(userId);
-
-    client.getUserProfile(request, (err, response) => {
-      if (err) {
-        reject(err);
-        return;
-      }
-
-      resolve({
-        id: response.getId(),
-        email: response.getEmail(),
-        firstName: response.getFirstName(),
-        lastName: response.getLastName(),
-        profile: {
-          age: response.getProfile()?.getAge(),
-          weight: response.getProfile()?.getWeight(),
-          height: response.getProfile()?.getHeight(),
-          fitnessLevel: response.getProfile()?.getFitnessLevel(),
-          fitnessGoals: response.getProfile()?.getFitnessGoalsList(),
-          medicalIssues: response.getProfile()?.getMedicalIssuesList(),
-          availableEquipment: response.getProfile()?.getAvailableEquipmentList(),
-        }
-      });
-    });
-  });
-};
-```
-
-#### Generar Plan de Entrenamiento
-
-```typescript
-// src/api/training.ts
-import { credentials } from '@grpc/grpc-js';
-import { TrainingServiceClient } from '../generated/fitness_grpc_pb';
-import { TrainingPlanRequest } from '../generated/fitness_pb';
-
-// Crear cliente gRPC
-const client = new TrainingServiceClient(
-  'your-server-address:50051',
-  credentials.createInsecure()
-);
-
-export const generateTrainingPlan = (params: {
-  userId: string;
-  name: string;
-  description?: string;
-  daysPerWeek: number;
-  focusArea: string;
-  sessionDuration: number;
-  includeWarmup: boolean;
-  includeCooldown: boolean;
-}): Promise<any> => {
-  return new Promise((resolve, reject) => {
-    const request = new TrainingPlanRequest();
-    request.setUserId(params.userId);
-    request.setName(params.name);
-    request.setDescription(params.description || '');
-    request.setDaysPerWeek(params.daysPerWeek);
-    request.setFocusArea(params.focusArea);
-    request.setSessionDuration(params.sessionDuration);
-    request.setIncludeWarmup(params.includeWarmup);
-    request.setIncludeCooldown(params.includeCooldown);
-
-    client.generateTrainingPlan(request, (err, response) => {
-      if (err) {
-        reject(err);
-        return;
-      }
-
-      const exercises = response.getExercisesList().map(exercise => ({
-        id: exercise.getId(),
-        name: exercise.getName(),
-        description: exercise.getDescription(),
-        sets: exercise.getSets(),
-        reps: exercise.getReps(),
-        restTime: exercise.getRestTime(),
-        notes: exercise.getNotes(),
-        dayOfWeek: exercise.getDayOfWeek(),
-        order: exercise.getOrder()
-      }));
-
-      resolve({
-        id: response.getId(),
-        userId: response.getUserId(),
-        name: response.getName(),
-        description: response.getDescription(),
-        createdAt: response.getCreatedAt(),
-        updatedAt: response.getUpdatedAt(),
-        isActive: response.getIsActive(),
-        generatedBy: response.getGeneratedBy(),
-        exercises
-      });
-    });
-  });
-};
-```
-
-## Generación de Código gRPC para TypeScript
-
-Para generar el código TypeScript a partir de las definiciones proto:
-
-```bash
-# Instalación de herramientas
-npm install -g grpc-tools
-npm install -g protoc-gen-ts
-
-# Generación de código
-mkdir -p src/generated
-protoc \
-  --plugin=protoc-gen-ts=./node_modules/.bin/protoc-gen-ts \
-  --ts_out=service=grpc-node:./src/generated \
-  --js_out=import_style=commonjs,binary:./src/generated \
-  --grpc_out=grpc_js:./src/generated \
-  ../proto/services.proto
-```
-
-## Notas Importantes
-
-- Para entornos de producción, debes usar credenciales seguras (TLS/SSL) en lugar de `credentials.createInsecure()`.
-- Puedes usar servicios como Envoy o grpc-web para facilitar la comunicación gRPC desde dispositivos móviles.
+1. Create a feature branch: `git checkout -b feature/my-feature`
+2. Commit your changes: `git commit -m 'Add some feature'`
+3. Push to the branch: `git push origin feature/my-feature`
+4. Submit a pull request
