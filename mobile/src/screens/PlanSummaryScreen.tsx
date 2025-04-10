@@ -1,17 +1,21 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
   TouchableOpacity,
   ScrollView,
   FlatList,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 import { RootStackParamList } from '../navigation';
 import { ExerciseData } from '../services/grpcClient';
+import grpcClient from '../services/grpcClient';
 import ExerciseCard from '../components/ExerciseCard';
+import { useAuth } from '../context/AuthContext';
 
 type PlanSummaryScreenNavigationProp = NativeStackNavigationProp<
   RootStackParamList,
@@ -63,9 +67,32 @@ export default function PlanSummaryScreen() {
   const navigation = useNavigation<PlanSummaryScreenNavigationProp>();
   const route = useRoute<PlanSummaryScreenRouteProp>();
   const { plan } = route.params;
+  const { user } = useAuth();
+  const [isLoading, setIsLoading] = useState(false);
 
   const groupedExercises = groupExercisesByDay(plan.exercises);
   const dayNumbers = Array.from(groupedExercises.keys()).sort();
+
+  const handleStartTodaySession = async () => {
+    if (!user?.id) {
+      Alert.alert('Error', 'User not authenticated');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const session = await grpcClient.trainingService.getTodaySession(user.id);
+      navigation.navigate('SessionFeedback', { sessionId: session.id });
+    } catch (error) {
+      console.error("Error fetching today's session:", error);
+      Alert.alert(
+        'Error',
+        "Unable to load today's session. Please try again later."
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
     <ScrollView className='flex-1 bg-background'>
@@ -123,6 +150,26 @@ export default function PlanSummaryScreen() {
             <Text className='text-white font-semibold text-center'>
               Back to Home
             </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            className={`p-4 rounded-lg ${
+              isLoading ? 'bg-primary/50' : 'bg-accent'
+            }`}
+            onPress={handleStartTodaySession}
+            disabled={isLoading}>
+            {isLoading ? (
+              <View className='flex-row justify-center items-center'>
+                <ActivityIndicator color='white' size='small' />
+                <Text className='text-white font-semibold ml-2'>
+                  Loading session...
+                </Text>
+              </View>
+            ) : (
+              <Text className='text-white font-semibold text-center'>
+                Start Today's Session
+              </Text>
+            )}
           </TouchableOpacity>
         </View>
       </View>
