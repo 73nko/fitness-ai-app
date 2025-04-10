@@ -1,5 +1,6 @@
 import { grpc } from '@improbable-eng/grpc-web';
 import Config from 'react-native-config';
+import { callUnary, GrpcMethodDefinition } from './grpcHelpers';
 
 // Define service endpoints
 const GRPC_ENDPOINT = Config.GRPC_ENDPOINT || 'http://localhost:8080';
@@ -194,7 +195,8 @@ class GrpcClient {
       submitSessionFeedback: this.submitSessionFeedback.bind(this),
       getTodaySession: this.getTodaySession.bind(this),
       getUserExerciseLogs: this.getUserExerciseLogs.bind(this),
-      generateProgressionSuggestions: this.generateProgressionSuggestions.bind(this),
+      generateProgressionSuggestions:
+        this.generateProgressionSuggestions.bind(this),
     };
   }
 
@@ -226,6 +228,37 @@ class GrpcClient {
           lastName: 'Doe',
         },
       };
+
+      /*
+      // EXAMPLE OF FUTURE IMPLEMENTATION WITH GENERATED PROTO FILES:
+      // When proto files are generated, you would use the callUnary function like this:
+
+      // Import the generated service definitions (to be generated)
+      // import { AuthenticateUser } from "../proto/user_pb_service";
+      // import { LoginRequest, AuthResponse } from "../proto/user_pb";
+
+      // Convert the request to a proper protobuf message
+      // const loginRequest = new LoginRequest();
+      // loginRequest.setEmail(request.email);
+      // loginRequest.setPassword(request.password);
+
+      // Use the callUnary function to make the gRPC call
+      // const response = await callUnary<LoginRequest, AuthResponse>(
+      //   AuthenticateUser,
+      //   loginRequest
+      // );
+
+      // Convert the response to our application type
+      // return {
+      //   token: response.getToken(),
+      //   user: {
+      //     id: response.getUser().getId(),
+      //     email: response.getUser().getEmail(),
+      //     firstName: response.getUser().getFirstname(),
+      //     lastName: response.getUser().getLastname(),
+      //   },
+      // };
+      */
     } catch (error) {
       console.error('Authentication error:', error);
       throw new Error('Authentication failed');
@@ -659,16 +692,19 @@ class GrpcClient {
         modified_exercises: [
           {
             exercise_id: 'Barbell Squat',
-            suggestion: 'Increase weight by 5kg for your working sets. Your form has been consistent.',
+            suggestion:
+              'Increase weight by 5kg for your working sets. Your form has been consistent.',
             new_weight: 85,
           },
           {
             exercise_id: 'Bench Press',
-            suggestion: 'You seem to be plateauing. Try increasing reps before adding weight.',
+            suggestion:
+              'You seem to be plateauing. Try increasing reps before adding weight.',
           },
           {
             exercise_id: 'Lateral Raises',
-            suggestion: 'Consider replacing with Cable Lateral Raises for better tension throughout the range of motion.',
+            suggestion:
+              'Consider replacing with Cable Lateral Raises for better tension throughout the range of motion.',
             replace_with: 'Cable Lateral Raises',
           },
         ],
