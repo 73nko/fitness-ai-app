@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -14,7 +14,7 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 import { useAuth } from '../context/AuthContext';
-import { isValidEmail, isValidPassword } from '../utils/validation';
+import { isValidEmail } from '../utils/validation';
 import { RootStackParamList } from '../navigation';
 
 type LoginScreenNavigationProp = NativeStackNavigationProp<
@@ -34,7 +34,7 @@ interface FormErrors {
 
 export default function LoginScreen() {
   const navigation = useNavigation<LoginScreenNavigationProp>();
-  const { login, isLoading, error, clearError } = useAuth();
+  const { login, isLoading, isAuthenticated, error, clearError } = useAuth();
 
   const [formData, setFormData] = useState<LoginFormData>({
     email: '',
@@ -44,18 +44,25 @@ export default function LoginScreen() {
   const [formErrors, setFormErrors] = useState<FormErrors>({});
 
   // Clear auth context errors when component unmounts
-  React.useEffect(() => {
+  useEffect(() => {
     return () => {
       clearError();
     };
   }, [clearError]);
 
   // Display auth error as an alert
-  React.useEffect(() => {
+  useEffect(() => {
     if (error) {
       Alert.alert('Login Error', error);
     }
   }, [error]);
+
+  // Redirect to Home screen after successful authentication
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigation.navigate('Home');
+    }
+  }, [isAuthenticated, navigation]);
 
   function validateForm(): boolean {
     const errors: FormErrors = {};
@@ -85,8 +92,10 @@ export default function LoginScreen() {
 
     try {
       await login(formData.email, formData.password);
+      // Note: Navigation is handled by the useEffect with isAuthenticated dependency
     } catch (err) {
       // Error is handled by the AuthContext
+      console.error('Login error:', err);
     }
   }
 
