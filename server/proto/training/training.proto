@@ -14,6 +14,12 @@ service TrainingService {
 
   // Get user progress
   rpc GetUserProgress(ProgressRequest) returns (ProgressResponse);
+
+  // Submit session feedback
+  rpc SubmitSessionFeedback(SubmitSessionFeedbackRequest) returns (SubmitSessionFeedbackResponse);
+
+  // Generate progression suggestions
+  rpc GenerateProgressionSuggestions(ProgressionSuggestionsRequest) returns (ProgressionSuggestionsResponse);
 }
 
 // Generate plan request
@@ -126,4 +132,47 @@ message ProgressPoint {
   optional float weight = 2;
   optional int32 total_sets = 3;
   optional int32 total_reps = 4;
+}
+
+// Session feedback related messages
+message ExerciseFeedback {
+  string exercise_name = 1;
+  string reps = 2;
+  float weight = 3;
+  int32 rir = 4;
+  string notes = 5;
+}
+
+
+message SubmitSessionFeedbackRequest {
+  string user_id = 1;
+  string session_id = 2;
+  repeated ExerciseFeedback exercises_feedback = 3;
+}
+
+message SubmitSessionFeedbackResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message ProgressionSuggestionsRequest {
+  string user_id = 1;
+  string training_plan_id = 2;
+  int32 history_weeks = 3; // Number of weeks of history to analyze (2-4 typically)
+}
+
+message ExerciseModificationSuggestion {
+  string exercise_id = 1;
+  string suggestion = 2;
+  float new_weight = 3;
+  string replace_with = 4;
+}
+
+message ProgressionSuggestionsResponse {
+  string training_plan_id = 1;
+  bool deload_recommended = 2;
+  string summary = 3;
+  repeated ExerciseModificationSuggestion modified_exercises = 4;
+  string generated_at = 5;
+  string model_used = 6;
 }

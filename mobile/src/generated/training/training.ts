@@ -129,6 +129,49 @@ export interface ProgressPoint {
   totalReps?: number | undefined;
 }
 
+/** Session feedback related messages */
+export interface ExerciseFeedback {
+  exerciseName: string;
+  reps: string;
+  weight: number;
+  rir: number;
+  notes: string;
+}
+
+export interface SubmitSessionFeedbackRequest {
+  userId: string;
+  sessionId: string;
+  exercisesFeedback: ExerciseFeedback[];
+}
+
+export interface SubmitSessionFeedbackResponse {
+  success: boolean;
+  message: string;
+}
+
+export interface ProgressionSuggestionsRequest {
+  userId: string;
+  trainingPlanId: string;
+  /** Number of weeks of history to analyze (2-4 typically) */
+  historyWeeks: number;
+}
+
+export interface ExerciseModificationSuggestion {
+  exerciseId: string;
+  suggestion: string;
+  newWeight: number;
+  replaceWith: string;
+}
+
+export interface ProgressionSuggestionsResponse {
+  trainingPlanId: string;
+  deloadRecommended: boolean;
+  summary: string;
+  modifiedExercises: ExerciseModificationSuggestion[];
+  generatedAt: string;
+  modelUsed: string;
+}
+
 function createBaseGeneratePlanRequest(): GeneratePlanRequest {
   return { userId: "", planName: undefined, description: undefined };
 }
@@ -1693,6 +1736,658 @@ export const ProgressPoint: MessageFns<ProgressPoint> = {
   },
 };
 
+function createBaseExerciseFeedback(): ExerciseFeedback {
+  return { exerciseName: "", reps: "", weight: 0, rir: 0, notes: "" };
+}
+
+export const ExerciseFeedback: MessageFns<ExerciseFeedback> = {
+  encode(message: ExerciseFeedback, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.exerciseName !== "") {
+      writer.uint32(10).string(message.exerciseName);
+    }
+    if (message.reps !== "") {
+      writer.uint32(18).string(message.reps);
+    }
+    if (message.weight !== 0) {
+      writer.uint32(29).float(message.weight);
+    }
+    if (message.rir !== 0) {
+      writer.uint32(32).int32(message.rir);
+    }
+    if (message.notes !== "") {
+      writer.uint32(42).string(message.notes);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ExerciseFeedback {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    let end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseExerciseFeedback();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.exerciseName = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.reps = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 29) {
+            break;
+          }
+
+          message.weight = reader.float();
+          continue;
+        }
+        case 4: {
+          if (tag !== 32) {
+            break;
+          }
+
+          message.rir = reader.int32();
+          continue;
+        }
+        case 5: {
+          if (tag !== 42) {
+            break;
+          }
+
+          message.notes = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): ExerciseFeedback {
+    return {
+      exerciseName: isSet(object.exerciseName) ? globalThis.String(object.exerciseName) : "",
+      reps: isSet(object.reps) ? globalThis.String(object.reps) : "",
+      weight: isSet(object.weight) ? globalThis.Number(object.weight) : 0,
+      rir: isSet(object.rir) ? globalThis.Number(object.rir) : 0,
+      notes: isSet(object.notes) ? globalThis.String(object.notes) : "",
+    };
+  },
+
+  toJSON(message: ExerciseFeedback): unknown {
+    const obj: any = {};
+    if (message.exerciseName !== "") {
+      obj.exerciseName = message.exerciseName;
+    }
+    if (message.reps !== "") {
+      obj.reps = message.reps;
+    }
+    if (message.weight !== 0) {
+      obj.weight = message.weight;
+    }
+    if (message.rir !== 0) {
+      obj.rir = Math.round(message.rir);
+    }
+    if (message.notes !== "") {
+      obj.notes = message.notes;
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<ExerciseFeedback>, I>>(base?: I): ExerciseFeedback {
+    return ExerciseFeedback.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<ExerciseFeedback>, I>>(object: I): ExerciseFeedback {
+    const message = createBaseExerciseFeedback();
+    message.exerciseName = object.exerciseName ?? "";
+    message.reps = object.reps ?? "";
+    message.weight = object.weight ?? 0;
+    message.rir = object.rir ?? 0;
+    message.notes = object.notes ?? "";
+    return message;
+  },
+};
+
+function createBaseSubmitSessionFeedbackRequest(): SubmitSessionFeedbackRequest {
+  return { userId: "", sessionId: "", exercisesFeedback: [] };
+}
+
+export const SubmitSessionFeedbackRequest: MessageFns<SubmitSessionFeedbackRequest> = {
+  encode(message: SubmitSessionFeedbackRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.userId !== "") {
+      writer.uint32(10).string(message.userId);
+    }
+    if (message.sessionId !== "") {
+      writer.uint32(18).string(message.sessionId);
+    }
+    for (const v of message.exercisesFeedback) {
+      ExerciseFeedback.encode(v!, writer.uint32(26).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): SubmitSessionFeedbackRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    let end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseSubmitSessionFeedbackRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.userId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.sessionId = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.exercisesFeedback.push(ExerciseFeedback.decode(reader, reader.uint32()));
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): SubmitSessionFeedbackRequest {
+    return {
+      userId: isSet(object.userId) ? globalThis.String(object.userId) : "",
+      sessionId: isSet(object.sessionId) ? globalThis.String(object.sessionId) : "",
+      exercisesFeedback: globalThis.Array.isArray(object?.exercisesFeedback)
+        ? object.exercisesFeedback.map((e: any) => ExerciseFeedback.fromJSON(e))
+        : [],
+    };
+  },
+
+  toJSON(message: SubmitSessionFeedbackRequest): unknown {
+    const obj: any = {};
+    if (message.userId !== "") {
+      obj.userId = message.userId;
+    }
+    if (message.sessionId !== "") {
+      obj.sessionId = message.sessionId;
+    }
+    if (message.exercisesFeedback?.length) {
+      obj.exercisesFeedback = message.exercisesFeedback.map((e) => ExerciseFeedback.toJSON(e));
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<SubmitSessionFeedbackRequest>, I>>(base?: I): SubmitSessionFeedbackRequest {
+    return SubmitSessionFeedbackRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<SubmitSessionFeedbackRequest>, I>>(object: I): SubmitSessionFeedbackRequest {
+    const message = createBaseSubmitSessionFeedbackRequest();
+    message.userId = object.userId ?? "";
+    message.sessionId = object.sessionId ?? "";
+    message.exercisesFeedback = object.exercisesFeedback?.map((e) => ExerciseFeedback.fromPartial(e)) || [];
+    return message;
+  },
+};
+
+function createBaseSubmitSessionFeedbackResponse(): SubmitSessionFeedbackResponse {
+  return { success: false, message: "" };
+}
+
+export const SubmitSessionFeedbackResponse: MessageFns<SubmitSessionFeedbackResponse> = {
+  encode(message: SubmitSessionFeedbackResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.success !== false) {
+      writer.uint32(8).bool(message.success);
+    }
+    if (message.message !== "") {
+      writer.uint32(18).string(message.message);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): SubmitSessionFeedbackResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    let end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseSubmitSessionFeedbackResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.success = reader.bool();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.message = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): SubmitSessionFeedbackResponse {
+    return {
+      success: isSet(object.success) ? globalThis.Boolean(object.success) : false,
+      message: isSet(object.message) ? globalThis.String(object.message) : "",
+    };
+  },
+
+  toJSON(message: SubmitSessionFeedbackResponse): unknown {
+    const obj: any = {};
+    if (message.success !== false) {
+      obj.success = message.success;
+    }
+    if (message.message !== "") {
+      obj.message = message.message;
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<SubmitSessionFeedbackResponse>, I>>(base?: I): SubmitSessionFeedbackResponse {
+    return SubmitSessionFeedbackResponse.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<SubmitSessionFeedbackResponse>, I>>(
+    object: I,
+  ): SubmitSessionFeedbackResponse {
+    const message = createBaseSubmitSessionFeedbackResponse();
+    message.success = object.success ?? false;
+    message.message = object.message ?? "";
+    return message;
+  },
+};
+
+function createBaseProgressionSuggestionsRequest(): ProgressionSuggestionsRequest {
+  return { userId: "", trainingPlanId: "", historyWeeks: 0 };
+}
+
+export const ProgressionSuggestionsRequest: MessageFns<ProgressionSuggestionsRequest> = {
+  encode(message: ProgressionSuggestionsRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.userId !== "") {
+      writer.uint32(10).string(message.userId);
+    }
+    if (message.trainingPlanId !== "") {
+      writer.uint32(18).string(message.trainingPlanId);
+    }
+    if (message.historyWeeks !== 0) {
+      writer.uint32(24).int32(message.historyWeeks);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ProgressionSuggestionsRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    let end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseProgressionSuggestionsRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.userId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.trainingPlanId = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.historyWeeks = reader.int32();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): ProgressionSuggestionsRequest {
+    return {
+      userId: isSet(object.userId) ? globalThis.String(object.userId) : "",
+      trainingPlanId: isSet(object.trainingPlanId) ? globalThis.String(object.trainingPlanId) : "",
+      historyWeeks: isSet(object.historyWeeks) ? globalThis.Number(object.historyWeeks) : 0,
+    };
+  },
+
+  toJSON(message: ProgressionSuggestionsRequest): unknown {
+    const obj: any = {};
+    if (message.userId !== "") {
+      obj.userId = message.userId;
+    }
+    if (message.trainingPlanId !== "") {
+      obj.trainingPlanId = message.trainingPlanId;
+    }
+    if (message.historyWeeks !== 0) {
+      obj.historyWeeks = Math.round(message.historyWeeks);
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<ProgressionSuggestionsRequest>, I>>(base?: I): ProgressionSuggestionsRequest {
+    return ProgressionSuggestionsRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<ProgressionSuggestionsRequest>, I>>(
+    object: I,
+  ): ProgressionSuggestionsRequest {
+    const message = createBaseProgressionSuggestionsRequest();
+    message.userId = object.userId ?? "";
+    message.trainingPlanId = object.trainingPlanId ?? "";
+    message.historyWeeks = object.historyWeeks ?? 0;
+    return message;
+  },
+};
+
+function createBaseExerciseModificationSuggestion(): ExerciseModificationSuggestion {
+  return { exerciseId: "", suggestion: "", newWeight: 0, replaceWith: "" };
+}
+
+export const ExerciseModificationSuggestion: MessageFns<ExerciseModificationSuggestion> = {
+  encode(message: ExerciseModificationSuggestion, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.exerciseId !== "") {
+      writer.uint32(10).string(message.exerciseId);
+    }
+    if (message.suggestion !== "") {
+      writer.uint32(18).string(message.suggestion);
+    }
+    if (message.newWeight !== 0) {
+      writer.uint32(29).float(message.newWeight);
+    }
+    if (message.replaceWith !== "") {
+      writer.uint32(34).string(message.replaceWith);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ExerciseModificationSuggestion {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    let end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseExerciseModificationSuggestion();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.exerciseId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.suggestion = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 29) {
+            break;
+          }
+
+          message.newWeight = reader.float();
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.replaceWith = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): ExerciseModificationSuggestion {
+    return {
+      exerciseId: isSet(object.exerciseId) ? globalThis.String(object.exerciseId) : "",
+      suggestion: isSet(object.suggestion) ? globalThis.String(object.suggestion) : "",
+      newWeight: isSet(object.newWeight) ? globalThis.Number(object.newWeight) : 0,
+      replaceWith: isSet(object.replaceWith) ? globalThis.String(object.replaceWith) : "",
+    };
+  },
+
+  toJSON(message: ExerciseModificationSuggestion): unknown {
+    const obj: any = {};
+    if (message.exerciseId !== "") {
+      obj.exerciseId = message.exerciseId;
+    }
+    if (message.suggestion !== "") {
+      obj.suggestion = message.suggestion;
+    }
+    if (message.newWeight !== 0) {
+      obj.newWeight = message.newWeight;
+    }
+    if (message.replaceWith !== "") {
+      obj.replaceWith = message.replaceWith;
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<ExerciseModificationSuggestion>, I>>(base?: I): ExerciseModificationSuggestion {
+    return ExerciseModificationSuggestion.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<ExerciseModificationSuggestion>, I>>(
+    object: I,
+  ): ExerciseModificationSuggestion {
+    const message = createBaseExerciseModificationSuggestion();
+    message.exerciseId = object.exerciseId ?? "";
+    message.suggestion = object.suggestion ?? "";
+    message.newWeight = object.newWeight ?? 0;
+    message.replaceWith = object.replaceWith ?? "";
+    return message;
+  },
+};
+
+function createBaseProgressionSuggestionsResponse(): ProgressionSuggestionsResponse {
+  return {
+    trainingPlanId: "",
+    deloadRecommended: false,
+    summary: "",
+    modifiedExercises: [],
+    generatedAt: "",
+    modelUsed: "",
+  };
+}
+
+export const ProgressionSuggestionsResponse: MessageFns<ProgressionSuggestionsResponse> = {
+  encode(message: ProgressionSuggestionsResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.trainingPlanId !== "") {
+      writer.uint32(10).string(message.trainingPlanId);
+    }
+    if (message.deloadRecommended !== false) {
+      writer.uint32(16).bool(message.deloadRecommended);
+    }
+    if (message.summary !== "") {
+      writer.uint32(26).string(message.summary);
+    }
+    for (const v of message.modifiedExercises) {
+      ExerciseModificationSuggestion.encode(v!, writer.uint32(34).fork()).join();
+    }
+    if (message.generatedAt !== "") {
+      writer.uint32(42).string(message.generatedAt);
+    }
+    if (message.modelUsed !== "") {
+      writer.uint32(50).string(message.modelUsed);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ProgressionSuggestionsResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    let end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseProgressionSuggestionsResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.trainingPlanId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.deloadRecommended = reader.bool();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.summary = reader.string();
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.modifiedExercises.push(ExerciseModificationSuggestion.decode(reader, reader.uint32()));
+          continue;
+        }
+        case 5: {
+          if (tag !== 42) {
+            break;
+          }
+
+          message.generatedAt = reader.string();
+          continue;
+        }
+        case 6: {
+          if (tag !== 50) {
+            break;
+          }
+
+          message.modelUsed = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): ProgressionSuggestionsResponse {
+    return {
+      trainingPlanId: isSet(object.trainingPlanId) ? globalThis.String(object.trainingPlanId) : "",
+      deloadRecommended: isSet(object.deloadRecommended) ? globalThis.Boolean(object.deloadRecommended) : false,
+      summary: isSet(object.summary) ? globalThis.String(object.summary) : "",
+      modifiedExercises: globalThis.Array.isArray(object?.modifiedExercises)
+        ? object.modifiedExercises.map((e: any) => ExerciseModificationSuggestion.fromJSON(e))
+        : [],
+      generatedAt: isSet(object.generatedAt) ? globalThis.String(object.generatedAt) : "",
+      modelUsed: isSet(object.modelUsed) ? globalThis.String(object.modelUsed) : "",
+    };
+  },
+
+  toJSON(message: ProgressionSuggestionsResponse): unknown {
+    const obj: any = {};
+    if (message.trainingPlanId !== "") {
+      obj.trainingPlanId = message.trainingPlanId;
+    }
+    if (message.deloadRecommended !== false) {
+      obj.deloadRecommended = message.deloadRecommended;
+    }
+    if (message.summary !== "") {
+      obj.summary = message.summary;
+    }
+    if (message.modifiedExercises?.length) {
+      obj.modifiedExercises = message.modifiedExercises.map((e) => ExerciseModificationSuggestion.toJSON(e));
+    }
+    if (message.generatedAt !== "") {
+      obj.generatedAt = message.generatedAt;
+    }
+    if (message.modelUsed !== "") {
+      obj.modelUsed = message.modelUsed;
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<ProgressionSuggestionsResponse>, I>>(base?: I): ProgressionSuggestionsResponse {
+    return ProgressionSuggestionsResponse.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<ProgressionSuggestionsResponse>, I>>(
+    object: I,
+  ): ProgressionSuggestionsResponse {
+    const message = createBaseProgressionSuggestionsResponse();
+    message.trainingPlanId = object.trainingPlanId ?? "";
+    message.deloadRecommended = object.deloadRecommended ?? false;
+    message.summary = object.summary ?? "";
+    message.modifiedExercises = object.modifiedExercises?.map((e) => ExerciseModificationSuggestion.fromPartial(e)) ||
+      [];
+    message.generatedAt = object.generatedAt ?? "";
+    message.modelUsed = object.modelUsed ?? "";
+    return message;
+  },
+};
+
 export interface TrainingService {
   /** Generate a training plan */
   GenerateTrainingPlan(request: GeneratePlanRequest): Promise<TrainingPlanResponse>;
@@ -1702,6 +2397,10 @@ export interface TrainingService {
   RecordWorkout(request: WorkoutRecordRequest): Promise<WorkoutRecordResponse>;
   /** Get user progress */
   GetUserProgress(request: ProgressRequest): Promise<ProgressResponse>;
+  /** Submit session feedback */
+  SubmitSessionFeedback(request: SubmitSessionFeedbackRequest): Promise<SubmitSessionFeedbackResponse>;
+  /** Generate progression suggestions */
+  GenerateProgressionSuggestions(request: ProgressionSuggestionsRequest): Promise<ProgressionSuggestionsResponse>;
 }
 
 export const TrainingServiceServiceName = "training.TrainingService";
@@ -1715,6 +2414,8 @@ export class TrainingServiceClientImpl implements TrainingService {
     this.GetTrainingPlan = this.GetTrainingPlan.bind(this);
     this.RecordWorkout = this.RecordWorkout.bind(this);
     this.GetUserProgress = this.GetUserProgress.bind(this);
+    this.SubmitSessionFeedback = this.SubmitSessionFeedback.bind(this);
+    this.GenerateProgressionSuggestions = this.GenerateProgressionSuggestions.bind(this);
   }
   GenerateTrainingPlan(request: GeneratePlanRequest): Promise<TrainingPlanResponse> {
     const data = GeneratePlanRequest.encode(request).finish();
@@ -1738,6 +2439,18 @@ export class TrainingServiceClientImpl implements TrainingService {
     const data = ProgressRequest.encode(request).finish();
     const promise = this.rpc.request(this.service, "GetUserProgress", data);
     return promise.then((data) => ProgressResponse.decode(new BinaryReader(data)));
+  }
+
+  SubmitSessionFeedback(request: SubmitSessionFeedbackRequest): Promise<SubmitSessionFeedbackResponse> {
+    const data = SubmitSessionFeedbackRequest.encode(request).finish();
+    const promise = this.rpc.request(this.service, "SubmitSessionFeedback", data);
+    return promise.then((data) => SubmitSessionFeedbackResponse.decode(new BinaryReader(data)));
+  }
+
+  GenerateProgressionSuggestions(request: ProgressionSuggestionsRequest): Promise<ProgressionSuggestionsResponse> {
+    const data = ProgressionSuggestionsRequest.encode(request).finish();
+    const promise = this.rpc.request(this.service, "GenerateProgressionSuggestions", data);
+    return promise.then((data) => ProgressionSuggestionsResponse.decode(new BinaryReader(data)));
   }
 }
 
