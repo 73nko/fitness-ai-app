@@ -12,6 +12,15 @@ import {
   ProfileRequest as ProfileRequestProto,
 } from '../generated/user/user';
 
+// Import training service definitions
+import {
+  GeneratePlanRequest,
+  TrainingPlanResponse as TrainingPlanProtoResponse,
+  TrainingService as TrainingServiceProto,
+  TrainingServiceServiceName,
+  Exercise as ExerciseProto,
+} from '../generated/training/training';
+
 // Define service endpoints
 const GRPC_ENDPOINT = env.GRPC_ENDPOINT;
 
@@ -436,63 +445,74 @@ class GrpcClient {
     request: TrainingPlanRequest
   ): Promise<TrainingPlanResponse> {
     try {
-      // This would be a real gRPC call in production
-      console.log('Generating training plan for user:', request.userId);
-
       // Check if we have an auth token
       if (!this.authToken) {
         throw new Error('Authentication required');
       }
 
-      // Simulating network delay
-      await new Promise((resolve) => setTimeout(resolve, 1500));
+      console.log('Generating training plan for user:', request.userId);
 
-      // Mock successful response
-      return {
-        id: '123456',
+      // Create the GeneratePlanRequest object from our frontend type
+      const grpcRequest = GeneratePlanRequest.create({
         userId: request.userId,
-        name: request.name,
+        planName: request.name,
         description: request.description,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        isActive: true,
-        generatedBy: 'AI',
-        exercises: [
-          {
-            id: 'ex1',
-            name: 'Push-up',
-            description:
-              'Standard push-up working chest, shoulders, and triceps',
-            sets: 3,
-            reps: '12-15',
-            restTime: 60,
-            notes: 'Focus on proper form',
-            dayOfWeek: 1,
-            order: 1,
-          },
-          {
-            id: 'ex2',
-            name: 'Squats',
-            description: 'Bodyweight squats for lower body',
-            sets: 3,
-            reps: '15-20',
-            restTime: 60,
-            notes: 'Engage core for stability',
-            dayOfWeek: 1,
-            order: 2,
-          },
-          {
-            id: 'ex3',
-            name: 'Plank',
-            description: 'Core stabilization exercise',
-            sets: 3,
-            reps: '30-45 seconds',
-            restTime: 45,
-            notes: 'Keep body straight',
-            dayOfWeek: 1,
-            order: 3,
-          },
-        ],
+        // Additional fields can be added as needed based on proto definition
+      });
+
+      // Define the GenerateTrainingPlan method
+      const generateTrainingPlanMethod: GrpcMethodDefinition<any, any> = {
+        methodName: 'GenerateTrainingPlan',
+        service: { serviceName: TrainingServiceServiceName },
+        requestStream: false,
+        responseStream: false,
+        requestType: {
+          new: () => GeneratePlanRequest.create({}),
+          encode: (message: any, writer?: any) =>
+            GeneratePlanRequest.encode(message, writer),
+        } as any,
+        responseType: {
+          new: () => TrainingPlanProtoResponse.create({}),
+          decode: (reader: any, length?: number) =>
+            TrainingPlanProtoResponse.decode(reader, length),
+        } as any,
+      };
+
+      // Call the gRPC endpoint using callUnary
+      const response = await callUnary(
+        generateTrainingPlanMethod,
+        grpcRequest,
+        this.authToken
+      );
+
+      // Convert the gRPC response to our frontend type
+      // Assuming response.trainingPlan contains the plan data
+      const trainingPlan = response.trainingPlan;
+      if (!trainingPlan) {
+        throw new Error('No training plan received from server');
+      }
+
+      // Map the response to our frontend type
+      return {
+        id: trainingPlan.id,
+        userId: trainingPlan.userId,
+        name: trainingPlan.name,
+        description: trainingPlan.description || '',
+        createdAt: trainingPlan.createdAt,
+        updatedAt: trainingPlan.updatedAt,
+        isActive: trainingPlan.isActive,
+        generatedBy: trainingPlan.generatedBy,
+        exercises: trainingPlan.exercises.map((exercise: ExerciseProto) => ({
+          id: exercise.id,
+          name: exercise.name,
+          description: exercise.description || '',
+          sets: exercise.sets,
+          reps: exercise.reps,
+          restTime: exercise.restTime || 60,
+          notes: exercise.notes || '',
+          dayOfWeek: exercise.dayOfWeek,
+          order: exercise.order,
+        })),
       };
     } catch (error) {
       console.error('Generate training plan error:', error);
