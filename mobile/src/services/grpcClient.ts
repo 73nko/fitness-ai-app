@@ -1,9 +1,19 @@
 import { grpc } from '@improbable-eng/grpc-web';
-import Config from 'react-native-config';
-import { callUnary, GrpcMethodDefinition } from './grpcHelpers';
+import env from '../config/env';
+import { callUnary, GrpcMethodDefinition, GrpcError } from './grpcHelpers';
+
+// Import the generated service and message definitions
+import {
+  UserServiceServiceName,
+  LoginRequest as LoginRequestProto,
+  LoginResponse as LoginResponseProto,
+  RegisterRequest as RegisterRequestProto,
+  UserResponse as UserResponseProto,
+  ProfileRequest as ProfileRequestProto,
+} from '../generated/user/user';
 
 // Define service endpoints
-const GRPC_ENDPOINT = Config.GRPC_ENDPOINT || 'http://localhost:8080';
+const GRPC_ENDPOINT = env.GRPC_ENDPOINT;
 
 // Types from our proto file
 export interface UserProfile {
@@ -211,57 +221,56 @@ class GrpcClient {
   // Authentication method
   private async authenticateUser(request: LoginRequest): Promise<AuthResponse> {
     try {
-      // This would be a real gRPC call in production
-      // For development, we're using a mock implementation
       console.log('Authenticating user:', request.email);
 
-      // Simulating network delay
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      // Create the gRPC request message using the create method
+      const loginRequest = LoginRequestProto.create({
+        email: request.email,
+        password: request.password,
+      });
 
-      // Mock successful response
-      return {
-        token: 'mock-jwt-token',
-        user: {
-          id: '1',
-          email: request.email,
-          firstName: 'John',
-          lastName: 'Doe',
-        },
+      // Define the Login method from the UserService
+      const loginMethod: GrpcMethodDefinition<any, any> = {
+        methodName: 'Login',
+        service: { serviceName: UserServiceServiceName },
+        requestStream: false,
+        responseStream: false,
+        requestType: {
+          new: () => LoginRequestProto.create({}),
+          encode: (message: any, writer?: any) =>
+            LoginRequestProto.encode(message, writer),
+        } as any,
+        responseType: {
+          new: () => LoginResponseProto.create({}),
+          decode: (reader: any, length?: number) =>
+            LoginResponseProto.decode(reader, length),
+        } as any,
       };
 
-      /*
-      // EXAMPLE OF FUTURE IMPLEMENTATION WITH GENERATED PROTO FILES:
-      // When proto files are generated, you would use the callUnary function like this:
+      // Make the gRPC call (no auth token needed for login)
+      const response = await callUnary<any, any>(loginMethod, loginRequest);
 
-      // Import the generated service definitions (to be generated)
-      // import { AuthenticateUser } from "../proto/user_pb_service";
-      // import { LoginRequest, AuthResponse } from "../proto/user_pb";
+      // We know the response is a LoginResponseProto, so we can safely access its properties
+      const typedResponse = response as ReturnType<
+        typeof LoginResponseProto.create
+      >;
 
-      // Convert the request to a proper protobuf message
-      // const loginRequest = new LoginRequest();
-      // loginRequest.setEmail(request.email);
-      // loginRequest.setPassword(request.password);
+      // Store the auth token for future requests
+      this.setAuthToken(typedResponse.token);
 
-      // Use the callUnary function to make the gRPC call
-      // const response = await callUnary<LoginRequest, AuthResponse>(
-      //   AuthenticateUser,
-      //   loginRequest
-      // );
-
-      // Convert the response to our application type
-      // return {
-      //   token: response.getToken(),
-      //   user: {
-      //     id: response.getUser().getId(),
-      //     email: response.getUser().getEmail(),
-      //     firstName: response.getUser().getFirstname(),
-      //     lastName: response.getUser().getLastname(),
-      //   },
-      // };
-      */
+      // Convert the gRPC response to the frontend type
+      return {
+        token: typedResponse.token,
+        user: {
+          id: typedResponse.user?.id || '',
+          email: typedResponse.user?.email || '',
+          firstName: typedResponse.user?.firstName || '',
+          lastName: typedResponse.user?.lastName || '',
+        },
+      };
     } catch (error) {
       console.error('Authentication error:', error);
-      throw new Error('Authentication failed');
+      throw error;
     }
   }
 
@@ -270,30 +279,91 @@ class GrpcClient {
     request: CreateUserRequest
   ): Promise<UserProfileResponse> {
     try {
-      // This would be a real gRPC call in production
       console.log('Creating user profile for:', request.email);
 
-      // Simulating network delay
-      await new Promise((resolve) => setTimeout(resolve, 700));
+      // Create profile data if provided
+      const profileData = request.profileData
+        ? {
+            age: request.profileData.age,
+            weight: request.profileData.weight,
+            height: request.profileData.height,
+            fitnessLevel: request.profileData.fitnessLevel,
+            fitnessGoals: request.profileData.fitnessGoals || [],
+            medicalIssues: request.profileData.medicalIssues || [],
+            availableEquipment: request.profileData.availableEquipment || [],
+            trainingPreferences: request.profileData.trainingPreferences,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          }
+        : undefined;
 
-      // Mock successful response
-      return {
-        id: '1',
+      // Create the gRPC request message using the create method
+      const registerRequest = RegisterRequestProto.create({
         email: request.email,
+        password: request.password,
         firstName: request.firstName,
         lastName: request.lastName,
-        profile: request.profileData,
+        profileData,
+      });
+
+      // Define the Register method from the UserService
+      const registerMethod: GrpcMethodDefinition<any, any> = {
+        methodName: 'Register',
+        service: { serviceName: UserServiceServiceName },
+        requestStream: false,
+        responseStream: false,
+        requestType: {
+          new: () => RegisterRequestProto.create({}),
+          encode: (message: any, writer?: any) =>
+            RegisterRequestProto.encode(message, writer),
+        } as any,
+        responseType: {
+          new: () => UserResponseProto.create({}),
+          decode: (reader: any, length?: number) =>
+            UserResponseProto.decode(reader, length),
+        } as any,
+      };
+
+      // Make the gRPC call (use auth token if available)
+      const response = await callUnary<any, any>(
+        registerMethod,
+        registerRequest,
+        this.authToken || undefined
+      );
+
+      // We know the response is a UserResponseProto, so we can safely access its properties
+      const typedResponse = response as ReturnType<
+        typeof UserResponseProto.create
+      >;
+
+      // Convert the gRPC response to the frontend type
+      return {
+        id: typedResponse.id,
+        email: typedResponse.email,
+        firstName: typedResponse.firstName,
+        lastName: typedResponse.lastName,
+        profile: typedResponse.profile
+          ? {
+              age: typedResponse.profile.age,
+              weight: typedResponse.profile.weight,
+              height: typedResponse.profile.height,
+              fitnessLevel: typedResponse.profile.fitnessLevel,
+              fitnessGoals: typedResponse.profile.fitnessGoals,
+              medicalIssues: typedResponse.profile.medicalIssues,
+              availableEquipment: typedResponse.profile.availableEquipment,
+              trainingPreferences: typedResponse.profile.trainingPreferences,
+            }
+          : undefined,
       };
     } catch (error) {
-      console.error('User registration error:', error);
-      throw new Error('User registration failed');
+      console.error('User creation error:', error);
+      throw error;
     }
   }
 
   // Get user profile method
   private async getUserProfile(userId: string): Promise<UserProfileResponse> {
     try {
-      // This would be a real gRPC call in production
       console.log('Getting user profile for ID:', userId);
 
       // Check if we have an auth token
@@ -301,32 +371,63 @@ class GrpcClient {
         throw new Error('Authentication required');
       }
 
-      // Simulating network delay
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      // Create the gRPC request message
+      const profileRequest = ProfileRequestProto.create({
+        userId: userId,
+      });
 
-      // Mock successful response
+      // Define the GetProfile method from the UserService
+      const getProfileMethod: GrpcMethodDefinition<any, any> = {
+        methodName: 'GetProfile',
+        service: { serviceName: UserServiceServiceName },
+        requestStream: false,
+        responseStream: false,
+        requestType: {
+          new: () => ProfileRequestProto.create({}),
+          encode: (message: any, writer?: any) =>
+            ProfileRequestProto.encode(message, writer),
+        } as any,
+        responseType: {
+          new: () => UserResponseProto.create({}),
+          decode: (reader: any, length?: number) =>
+            UserResponseProto.decode(reader, length),
+        } as any,
+      };
+
+      // Make the gRPC call with auth token
+      const response = await callUnary<any, any>(
+        getProfileMethod,
+        profileRequest,
+        this.authToken
+      );
+
+      // We know the response is a UserResponseProto
+      const typedResponse = response as ReturnType<
+        typeof UserResponseProto.create
+      >;
+
+      // Convert the gRPC response to the frontend type
       return {
-        id: userId,
-        email: 'user@example.com',
-        firstName: 'John',
-        lastName: 'Doe',
-        profile: {
-          age: 30,
-          weight: 75,
-          height: 180,
-          fitnessLevel: 'Intermediate',
-          fitnessGoals: ['Build muscle', 'Improve endurance'],
-          medicalIssues: [],
-          availableEquipment: ['Dumbbells', 'Bench', 'Pull-up bar'],
-          trainingPreferences: JSON.stringify({
-            preferredDays: [1, 3, 5],
-            maxSessionDuration: 60,
-          }),
-        },
+        id: typedResponse.id,
+        email: typedResponse.email,
+        firstName: typedResponse.firstName,
+        lastName: typedResponse.lastName,
+        profile: typedResponse.profile
+          ? {
+              age: typedResponse.profile.age,
+              weight: typedResponse.profile.weight,
+              height: typedResponse.profile.height,
+              fitnessLevel: typedResponse.profile.fitnessLevel,
+              fitnessGoals: typedResponse.profile.fitnessGoals,
+              medicalIssues: typedResponse.profile.medicalIssues,
+              availableEquipment: typedResponse.profile.availableEquipment,
+              trainingPreferences: typedResponse.profile.trainingPreferences,
+            }
+          : undefined,
       };
     } catch (error) {
       console.error('Get profile error:', error);
-      throw new Error('Failed to get user profile');
+      throw error;
     }
   }
 
