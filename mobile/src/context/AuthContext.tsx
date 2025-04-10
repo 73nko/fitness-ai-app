@@ -1,10 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import grpcClient, {
-  UserProfile,
-  AuthResponse,
-  ProfileData,
-} from '../services/grpcClient';
+import grpcClient, { UserProfile, ProfileData } from '../services/grpcClient';
 
 // Auth storage keys
 const AUTH_TOKEN_KEY = '@fitness_app:auth_token';
@@ -12,6 +8,7 @@ const USER_DATA_KEY = '@fitness_app:user_data';
 
 interface AuthContextType {
   user: UserProfile | null;
+  token: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
   error: string | null;
@@ -19,6 +16,8 @@ interface AuthContextType {
   register: (data: RegisterData) => Promise<void>;
   logout: () => Promise<void>;
   clearError: () => void;
+  setUser: (user: UserProfile | null) => void;
+  setToken: (token: string | null) => void;
 }
 
 export interface RegisterData {
@@ -35,6 +34,7 @@ interface AuthProviderProps {
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
+  token: null,
   isAuthenticated: false,
   isLoading: true,
   error: null,
@@ -42,12 +42,15 @@ const AuthContext = createContext<AuthContextType>({
   register: async () => {},
   logout: async () => {},
   clearError: () => {},
+  setUser: () => {},
+  setToken: () => {},
 });
 
 export const useAuth = () => useContext(AuthContext);
 
 export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<UserProfile | null>(null);
+  const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -64,6 +67,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         if (storedToken && storedUserData) {
           // Set the auth token on the gRPC client
           grpcClient.setAuthToken(storedToken);
+          setToken(storedToken);
 
           // Parse and set the user data
           const userData = JSON.parse(storedUserData) as UserProfile;
@@ -80,13 +84,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
     checkAuthStatus();
   }, []);
 
-  const storeAuthData = async (token: string, userData: UserProfile) => {
+  const storeAuthData = async (authToken: string, userData: UserProfile) => {
     try {
-      await AsyncStorage.setItem(AUTH_TOKEN_KEY, token);
+      await AsyncStorage.setItem(AUTH_TOKEN_KEY, authToken);
       await AsyncStorage.setItem(USER_DATA_KEY, JSON.stringify(userData));
 
       // Set token on the gRPC client for future authenticated requests
-      grpcClient.setAuthToken(token);
+      grpcClient.setAuthToken(authToken);
+      setToken(authToken);
     } catch (err) {
       console.error('Failed to store auth data:', err);
       throw new Error('Failed to save authentication data');
@@ -153,6 +158,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
       // Update state
       setUser(null);
+      setToken(null);
     } catch (err) {
       console.error('Logout failed:', err);
       setError('Failed to logout properly');
@@ -167,6 +173,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     <AuthContext.Provider
       value={{
         user,
+        token,
         isAuthenticated: !!user,
         isLoading,
         error,
@@ -174,6 +181,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
         register,
         logout,
         clearError,
+        setUser,
+        setToken,
       }}>
       {children}
     </AuthContext.Provider>

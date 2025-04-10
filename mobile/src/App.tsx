@@ -7,16 +7,19 @@ import { NavigationContainer } from '@react-navigation/native';
 import './utils/nativewind-setup';
 
 import { AuthProvider } from './context/AuthContext';
+import { TrainingProvider } from './context/TrainingContext';
 import Navigation from './navigation';
 
 function App() {
   return (
     <SafeAreaProvider>
       <AuthProvider>
-        <NavigationContainer>
-          <Navigation />
-          <StatusBar style='auto' />
-        </NavigationContainer>
+        <TrainingProvider>
+          <NavigationContainer>
+            <Navigation />
+            <StatusBar style='auto' />
+          </NavigationContainer>
+        </TrainingProvider>
       </AuthProvider>
     </SafeAreaProvider>
   );

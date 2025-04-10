@@ -54,6 +54,7 @@ mobile/
       env.ts
     context/
       AuthContext.tsx
+      TrainingContext.tsx
     generated/
       ai/
         ai.ts
@@ -183,6 +184,174 @@ web.Dockerfile
 
 <files>
 This section contains the contents of the repository's files.
+
+<file path="mobile/src/context/TrainingContext.tsx">
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import grpcClient, {
+  TrainingPlanResponse,
+  TrainingPlanRequest,
+} from '../services/grpcClient';
+import { useAuth } from './AuthContext';
+
+// Training plan storage key
+const TRAINING_PLAN_KEY = '@fitness_app:training_plan';
+
+interface TrainingContextType {
+  trainingPlan: TrainingPlanResponse | null;
+  isLoading: boolean;
+  error: string | null;
+  setTrainingPlan: (plan: TrainingPlanResponse | null) => void;
+  fetchTrainingPlan: () => Promise<TrainingPlanResponse | null>;
+  fetchTodaySession: () => Promise<TrainingPlanResponse | null>;
+  clearError: () => void;
+}
+
+interface TrainingProviderProps {
+  children: React.ReactNode;
+}
+
+const TrainingContext = createContext<TrainingContextType>({
+  trainingPlan: null,
+  isLoading: false,
+  error: null,
+  setTrainingPlan: () => {},
+  fetchTrainingPlan: async () => null,
+  fetchTodaySession: async () => null,
+  clearError: () => {},
+});
+
+export const useTraining = () => useContext(TrainingContext);
+
+export function TrainingProvider({ children }: TrainingProviderProps) {
+  const [trainingPlan, setTrainingPlan] = useState<TrainingPlanResponse | null>(
+    null
+  );
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const { user, isAuthenticated } = useAuth();
+
+  // Load cached training plan on mount
+  useEffect(() => {
+    const loadCachedTrainingPlan = async () => {
+      if (!isAuthenticated) return;
+
+      try {
+        const storedPlan = await AsyncStorage.getItem(TRAINING_PLAN_KEY);
+        if (storedPlan) {
+          const parsedPlan = JSON.parse(storedPlan) as TrainingPlanResponse;
+          // Only set the plan if it belongs to the current user
+          if (parsedPlan.userId === user?.id) {
+            setTrainingPlan(parsedPlan);
+          } else {
+            // Clear cached plan if it's for a different user
+            await AsyncStorage.removeItem(TRAINING_PLAN_KEY);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load cached training plan:', err);
+      }
+    };
+
+    loadCachedTrainingPlan();
+  }, [isAuthenticated, user?.id]);
+
+  // Cache training plan when it changes
+  useEffect(() => {
+    const cacheTrainingPlan = async () => {
+      if (trainingPlan) {
+        try {
+          await AsyncStorage.setItem(
+            TRAINING_PLAN_KEY,
+            JSON.stringify(trainingPlan)
+          );
+        } catch (err) {
+          console.error('Failed to cache training plan:', err);
+        }
+      }
+    };
+
+    cacheTrainingPlan();
+  }, [trainingPlan]);
+
+  const fetchTrainingPlan = async (): Promise<TrainingPlanResponse | null> => {
+    if (!isAuthenticated || !user) {
+      setError('User not authenticated');
+      return null;
+    }
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      // For now, we assume the user has a default request
+      // This could be enhanced to accept parameters
+      const request: TrainingPlanRequest = {
+        userId: user.id,
+        name: 'My Training Plan',
+        description: 'Generated training plan',
+        daysPerWeek: 3,
+        focusArea: 'general',
+        sessionDuration: 60,
+        includeWarmup: true,
+        includeCooldown: true,
+      };
+
+      const response =
+        await grpcClient.trainingService.generateTrainingPlan(request);
+      setTrainingPlan(response);
+      return response;
+    } catch (err: any) {
+      console.error('Failed to fetch training plan:', err);
+      setError(err.message || 'Failed to fetch training plan');
+      return null;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const fetchTodaySession = async (): Promise<TrainingPlanResponse | null> => {
+    if (!isAuthenticated || !user) {
+      setError('User not authenticated');
+      return null;
+    }
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const response = await grpcClient.trainingService.getTodaySession(
+        user.id
+      );
+      setTrainingPlan(response);
+      return response;
+    } catch (err: any) {
+      console.error("Failed to fetch today's session:", err);
+      setError(err.message || "Failed to fetch today's training session");
+      return null;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const clearError = () => setError(null);
+
+  return (
+    <TrainingContext.Provider
+      value={{
+        trainingPlan,
+        isLoading,
+        error,
+        setTrainingPlan,
+        fetchTrainingPlan,
+        fetchTodaySession,
+        clearError,
+      }}>
+      {children}
+    </TrainingContext.Provider>
+  );
+}
+</file>
 
 <file path="mobile/src/components/Button.tsx">
 import * as React from 'react';
@@ -6380,16 +6549,19 @@ import { NavigationContainer } from '@react-navigation/native';
 import './utils/nativewind-setup';
 
 import { AuthProvider } from './context/AuthContext';
+import { TrainingProvider } from './context/TrainingContext';
 import Navigation from './navigation';
 
 function App() {
   return (
     <SafeAreaProvider>
       <AuthProvider>
-        <NavigationContainer>
-          <Navigation />
-          <StatusBar style='auto' />
-        </NavigationContainer>
+        <TrainingProvider>
+          <NavigationContainer>
+            <Navigation />
+            <StatusBar style='auto' />
+          </NavigationContainer>
+        </TrainingProvider>
       </AuthProvider>
     </SafeAreaProvider>
   );
@@ -12299,11 +12471,7 @@ CMD ["npm", "start"]
 <file path="mobile/src/context/AuthContext.tsx">
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import grpcClient, {
-  UserProfile,
-  AuthResponse,
-  ProfileData,
-} from '../services/grpcClient';
+import grpcClient, { UserProfile, ProfileData } from '../services/grpcClient';
 
 // Auth storage keys
 const AUTH_TOKEN_KEY = '@fitness_app:auth_token';
@@ -12311,6 +12479,7 @@ const USER_DATA_KEY = '@fitness_app:user_data';
 
 interface AuthContextType {
   user: UserProfile | null;
+  token: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
   error: string | null;
@@ -12318,6 +12487,8 @@ interface AuthContextType {
   register: (data: RegisterData) => Promise<void>;
   logout: () => Promise<void>;
   clearError: () => void;
+  setUser: (user: UserProfile | null) => void;
+  setToken: (token: string | null) => void;
 }
 
 export interface RegisterData {
@@ -12334,6 +12505,7 @@ interface AuthProviderProps {
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
+  token: null,
   isAuthenticated: false,
   isLoading: true,
   error: null,
@@ -12341,12 +12513,15 @@ const AuthContext = createContext<AuthContextType>({
   register: async () => {},
   logout: async () => {},
   clearError: () => {},
+  setUser: () => {},
+  setToken: () => {},
 });
 
 export const useAuth = () => useContext(AuthContext);
 
 export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<UserProfile | null>(null);
+  const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -12363,6 +12538,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         if (storedToken && storedUserData) {
           // Set the auth token on the gRPC client
           grpcClient.setAuthToken(storedToken);
+          setToken(storedToken);
 
           // Parse and set the user data
           const userData = JSON.parse(storedUserData) as UserProfile;
@@ -12379,13 +12555,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
     checkAuthStatus();
   }, []);
 
-  const storeAuthData = async (token: string, userData: UserProfile) => {
+  const storeAuthData = async (authToken: string, userData: UserProfile) => {
     try {
-      await AsyncStorage.setItem(AUTH_TOKEN_KEY, token);
+      await AsyncStorage.setItem(AUTH_TOKEN_KEY, authToken);
       await AsyncStorage.setItem(USER_DATA_KEY, JSON.stringify(userData));
 
       // Set token on the gRPC client for future authenticated requests
-      grpcClient.setAuthToken(token);
+      grpcClient.setAuthToken(authToken);
+      setToken(authToken);
     } catch (err) {
       console.error('Failed to store auth data:', err);
       throw new Error('Failed to save authentication data');
@@ -12452,6 +12629,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
       // Update state
       setUser(null);
+      setToken(null);
     } catch (err) {
       console.error('Logout failed:', err);
       setError('Failed to logout properly');
@@ -12466,6 +12644,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     <AuthContext.Provider
       value={{
         user,
+        token,
         isAuthenticated: !!user,
         isLoading,
         error,
@@ -12473,6 +12652,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
         register,
         logout,
         clearError,
+        setUser,
+        setToken,
       }}>
       {children}
     </AuthContext.Provider>
@@ -30617,6 +30798,7 @@ export default function HomeScreen() {
 
 <file path="mobile/src/navigation/index.tsx">
 import React from 'react';
+import { ActivityIndicator, View } from 'react-native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import HomeScreen from '../screens/HomeScreen';
@@ -30647,19 +30829,28 @@ export type RootStackParamList = {
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
-export default function Navigation() {
-  const { user, isLoading } = useAuth();
-
-  // Skip rendering until auth state is determined
-  if (isLoading) {
-    return null;
-  }
-
+/**
+ * AuthStack - Navigation stack for unauthenticated users
+ */
+function AuthStack() {
   return (
     <Stack.Navigator
-      initialRouteName={user ? 'Home' : 'Login'}
       screenOptions={{
-        headerShown: true,
+        headerShown: false,
+      }}>
+      <Stack.Screen name='Login' component={LoginScreen} />
+      <Stack.Screen name='Register' component={RegisterScreen} />
+    </Stack.Navigator>
+  );
+}
+
+/**
+ * AppStack - Navigation stack for authenticated users
+ */
+function AppStack() {
+  return (
+    <Stack.Navigator
+      screenOptions={{
         headerStyle: {
           backgroundColor: '#3B82F6',
         },
@@ -30668,62 +30859,59 @@ export default function Navigation() {
           fontWeight: 'bold',
         },
       }}>
-      {user ? (
-        // Authenticated routes
-        <>
-          <Stack.Screen
-            name='Home'
-            component={HomeScreen}
-            options={{ title: 'Fitness AI' }}
-          />
-          <Stack.Screen
-            name='Profile'
-            component={ProfileScreen}
-            options={{ title: 'Your Profile' }}
-          />
-          <Stack.Screen
-            name='GeneratePlan'
-            component={GeneratePlanScreen}
-            options={{ title: 'Create Training Plan' }}
-          />
-          <Stack.Screen
-            name='PlanSummary'
-            component={PlanSummaryScreen}
-            options={{ title: 'Training Plan' }}
-          />
-          <Stack.Screen
-            name='SessionFeedback'
-            component={SessionFeedbackScreen}
-            options={{ title: 'Workout Feedback' }}
-          />
-          <Stack.Screen
-            name='Progress'
-            component={ProgressScreen}
-            options={{ title: 'Your Progress' }}
-          />
-          <Stack.Screen
-            name='ProgressAnalysis'
-            component={ProgressAnalysisScreen}
-            options={{ title: 'Progress Analysis' }}
-          />
-        </>
-      ) : (
-        // Unauthenticated routes
-        <>
-          <Stack.Screen
-            name='Login'
-            component={LoginScreen}
-            options={{ headerShown: false }}
-          />
-          <Stack.Screen
-            name='Register'
-            component={RegisterScreen}
-            options={{ headerShown: false }}
-          />
-        </>
-      )}
+      <Stack.Screen
+        name='Home'
+        component={HomeScreen}
+        options={{ title: 'Fitness AI' }}
+      />
+      <Stack.Screen
+        name='Profile'
+        component={ProfileScreen}
+        options={{ title: 'Your Profile' }}
+      />
+      <Stack.Screen
+        name='GeneratePlan'
+        component={GeneratePlanScreen}
+        options={{ title: 'Create Training Plan' }}
+      />
+      <Stack.Screen
+        name='PlanSummary'
+        component={PlanSummaryScreen}
+        options={{ title: 'Training Plan' }}
+      />
+      <Stack.Screen
+        name='SessionFeedback'
+        component={SessionFeedbackScreen}
+        options={{ title: 'Workout Feedback' }}
+      />
+      <Stack.Screen
+        name='Progress'
+        component={ProgressScreen}
+        options={{ title: 'Your Progress' }}
+      />
+      <Stack.Screen
+        name='ProgressAnalysis'
+        component={ProgressAnalysisScreen}
+        options={{ title: 'Progress Analysis' }}
+      />
     </Stack.Navigator>
   );
+}
+
+export default function Navigation() {
+  const { user, isLoading, isAuthenticated } = useAuth();
+
+  // Show loading indicator while determining auth state
+  if (isLoading) {
+    return (
+      <View className='flex-1 justify-center items-center'>
+        <ActivityIndicator size='large' color='#3B82F6' />
+      </View>
+    );
+  }
+
+  // Choose the appropriate stack based on authentication state
+  return isAuthenticated ? <AppStack /> : <AuthStack />;
 }
 </file>
 
@@ -30755,6 +30943,9 @@ import {
   ProgressResponse,
   ExerciseProgress,
   ProgressPoint,
+  ProgressionSuggestionsRequest as ProgressionSuggestionsRequestProto,
+  ProgressionSuggestionsResponse as ProgressionSuggestionsResponseProto,
+  ExerciseModificationSuggestion as ExerciseModificationSuggestionProto,
 } from '../generated/training/training';
 
 // Define service endpoints
@@ -31326,7 +31517,6 @@ class GrpcClient {
   // Get today's training session
   private async getTodaySession(userId: string): Promise<TrainingPlanResponse> {
     try {
-      // This would be a real gRPC call in production
       console.log('Getting today session for user:', userId);
 
       // Check if we have an auth token
@@ -31334,21 +31524,29 @@ class GrpcClient {
         throw new Error('Authentication required');
       }
 
-      // Simulating network delay
-      await new Promise((resolve) => setTimeout(resolve, 700));
+      // Generate the full training plan
+      const fullPlan = await this.generateTrainingPlan({
+        userId: userId,
+        name: 'Auto Plan',
+        description: 'Plan generado automáticamente para filtrar sesión diaria',
+        daysPerWeek: 7,
+        focusArea: 'general',
+        sessionDuration: 60,
+        includeWarmup: true,
+        includeCooldown: true,
+      });
 
       // Get current day of week (0-6, where 0 is Sunday)
       const today = new Date().getDay();
 
-      // Mock successful response with exercises filtered for today
-      const mockPlan = this.generateMockTrainingPlan(userId);
-      const filteredExercises = mockPlan.exercises.filter(
+      // Filter exercises for today
+      const todayExercises = fullPlan.exercises.filter(
         (exercise) => exercise.dayOfWeek === today
       );
 
       return {
-        ...mockPlan,
-        exercises: filteredExercises,
+        ...fullPlan,
+        exercises: todayExercises,
       };
     } catch (error) {
       console.error('Get today session error:', error);
@@ -31555,7 +31753,6 @@ class GrpcClient {
     request: ProgressionSuggestionsRequest
   ): Promise<ProgressionSuggestionsResponse> {
     try {
-      // This would be a real gRPC call in production
       console.log(
         'Generating progression suggestions for user:',
         request.user_id,
@@ -31568,35 +31765,50 @@ class GrpcClient {
         throw new Error('Authentication required');
       }
 
-      // Simulating network delay
-      await new Promise((resolve) => setTimeout(resolve, 1500));
+      // Create the proto request message
+      const req = ProgressionSuggestionsRequestProto.create({
+        userId: request.user_id,
+        trainingPlanId: request.training_plan_id,
+        historyWeeks: request.history_weeks,
+      });
 
-      // Mock response for development
+      // Define the method details for the GenerateProgressionSuggestions endpoint
+      const progressionMethod: GrpcMethodDefinition<any, any> = {
+        methodName: 'GenerateProgressionSuggestions',
+        service: { serviceName: TrainingServiceServiceName },
+        requestStream: false,
+        responseStream: false,
+        requestType: {
+          new: () => ProgressionSuggestionsRequestProto.create({}),
+          encode: (msg: any, writer?: any) =>
+            ProgressionSuggestionsRequestProto.encode(msg, writer),
+        } as any,
+        responseType: {
+          new: () => ProgressionSuggestionsResponseProto.create({}),
+          decode: (reader: any, length?: number) =>
+            ProgressionSuggestionsResponseProto.decode(reader, length),
+        } as any,
+      };
+
+      // Make the gRPC call
+      const response = await callUnary<
+        ProgressionSuggestionsRequestProto,
+        ProgressionSuggestionsResponseProto
+      >(progressionMethod, req, this.authToken);
+
+      // Convert the proto response to our frontend type
       return {
-        training_plan_id: request.training_plan_id,
-        deload_recommended: Math.random() > 0.7, // 30% chance of recommending deload
-        summary: `Based on your last ${request.history_weeks} weeks of training, you've been making steady progress. You might benefit from progressively increasing weight on compound lifts and adding volume to isolation exercises.`,
-        modified_exercises: [
-          {
-            exercise_id: 'Barbell Squat',
-            suggestion:
-              'Increase weight by 5kg for your working sets. Your form has been consistent.',
-            new_weight: 85,
-          },
-          {
-            exercise_id: 'Bench Press',
-            suggestion:
-              'You seem to be plateauing. Try increasing reps before adding weight.',
-          },
-          {
-            exercise_id: 'Lateral Raises',
-            suggestion:
-              'Consider replacing with Cable Lateral Raises for better tension throughout the range of motion.',
-            replace_with: 'Cable Lateral Raises',
-          },
-        ],
-        generated_at: new Date().toISOString(),
-        model_used: 'gpt-4',
+        training_plan_id: response.trainingPlanId,
+        deload_recommended: response.deloadRecommended,
+        summary: response.summary,
+        modified_exercises: response.modifiedExercises.map((exercise) => ({
+          exercise_id: exercise.exerciseId,
+          suggestion: exercise.suggestion,
+          new_weight: exercise.newWeight || undefined,
+          replace_with: exercise.replaceWith || undefined,
+        })),
+        generated_at: response.generatedAt,
+        model_used: response.modelUsed,
       };
     } catch (error) {
       console.error('Progression suggestions error:', error);
