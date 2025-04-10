@@ -25,6 +25,9 @@ import {
   ProgressResponse,
   ExerciseProgress,
   ProgressPoint,
+  ProgressionSuggestionsRequest as ProgressionSuggestionsRequestProto,
+  ProgressionSuggestionsResponse as ProgressionSuggestionsResponseProto,
+  ExerciseModificationSuggestion as ExerciseModificationSuggestionProto,
 } from '../generated/training/training';
 
 // Define service endpoints
@@ -825,7 +828,6 @@ class GrpcClient {
     request: ProgressionSuggestionsRequest
   ): Promise<ProgressionSuggestionsResponse> {
     try {
-      // This would be a real gRPC call in production
       console.log(
         'Generating progression suggestions for user:',
         request.user_id,
@@ -838,35 +840,50 @@ class GrpcClient {
         throw new Error('Authentication required');
       }
 
-      // Simulating network delay
-      await new Promise((resolve) => setTimeout(resolve, 1500));
+      // Create the proto request message
+      const req = ProgressionSuggestionsRequestProto.create({
+        userId: request.user_id,
+        trainingPlanId: request.training_plan_id,
+        historyWeeks: request.history_weeks,
+      });
 
-      // Mock response for development
+      // Define the method details for the GenerateProgressionSuggestions endpoint
+      const progressionMethod: GrpcMethodDefinition<any, any> = {
+        methodName: 'GenerateProgressionSuggestions',
+        service: { serviceName: TrainingServiceServiceName },
+        requestStream: false,
+        responseStream: false,
+        requestType: {
+          new: () => ProgressionSuggestionsRequestProto.create({}),
+          encode: (msg: any, writer?: any) =>
+            ProgressionSuggestionsRequestProto.encode(msg, writer),
+        } as any,
+        responseType: {
+          new: () => ProgressionSuggestionsResponseProto.create({}),
+          decode: (reader: any, length?: number) =>
+            ProgressionSuggestionsResponseProto.decode(reader, length),
+        } as any,
+      };
+
+      // Make the gRPC call
+      const response = await callUnary<
+        ProgressionSuggestionsRequestProto,
+        ProgressionSuggestionsResponseProto
+      >(progressionMethod, req, this.authToken);
+
+      // Convert the proto response to our frontend type
       return {
-        training_plan_id: request.training_plan_id,
-        deload_recommended: Math.random() > 0.7, // 30% chance of recommending deload
-        summary: `Based on your last ${request.history_weeks} weeks of training, you've been making steady progress. You might benefit from progressively increasing weight on compound lifts and adding volume to isolation exercises.`,
-        modified_exercises: [
-          {
-            exercise_id: 'Barbell Squat',
-            suggestion:
-              'Increase weight by 5kg for your working sets. Your form has been consistent.',
-            new_weight: 85,
-          },
-          {
-            exercise_id: 'Bench Press',
-            suggestion:
-              'You seem to be plateauing. Try increasing reps before adding weight.',
-          },
-          {
-            exercise_id: 'Lateral Raises',
-            suggestion:
-              'Consider replacing with Cable Lateral Raises for better tension throughout the range of motion.',
-            replace_with: 'Cable Lateral Raises',
-          },
-        ],
-        generated_at: new Date().toISOString(),
-        model_used: 'gpt-4',
+        training_plan_id: response.trainingPlanId,
+        deload_recommended: response.deloadRecommended,
+        summary: response.summary,
+        modified_exercises: response.modifiedExercises.map((exercise) => ({
+          exercise_id: exercise.exerciseId,
+          suggestion: exercise.suggestion,
+          new_weight: exercise.newWeight || undefined,
+          replace_with: exercise.replaceWith || undefined,
+        })),
+        generated_at: response.generatedAt,
+        model_used: response.modelUsed,
       };
     } catch (error) {
       console.error('Progression suggestions error:', error);
