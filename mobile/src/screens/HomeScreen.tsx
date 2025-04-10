@@ -39,9 +39,9 @@ export default function HomeScreen() {
 
         <TouchableOpacity
           className='bg-secondary p-4 rounded-lg mb-3'
-          onPress={() => console.log('Start Workout')}>
+          onPress={() => navigation.navigate('SessionFeedback', {})}>
           <Text className='text-white font-semibold text-center'>
-            Start Workout
+            Today's Workout
           </Text>
         </TouchableOpacity>
 
