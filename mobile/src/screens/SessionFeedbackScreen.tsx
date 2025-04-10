@@ -3,7 +3,7 @@ import {
   View,
   Text,
   TouchableOpacity,
-  ScrollView,
+  FlatList,
   StyleSheet,
   ActivityIndicator,
   Alert,
@@ -40,30 +40,42 @@ export default function SessionFeedbackScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [exercises, setExercises] = useState<ExerciseData[]>([]);
-  const [currentExerciseIndex, setCurrentExerciseIndex] = useState(0);
-  const [isReviewMode, setIsReviewMode] = useState(false);
   const [formData, setFormData] = useState<
     Record<string, ExerciseFeedbackState>
   >({});
   const [error, setError] = useState<string | null>(null);
+  const [isReviewMode, setIsReviewMode] = useState(false);
 
-  // Fetch today's session data
+  // Fetch session data using sessionId from route params if available
   useEffect(() => {
-    const fetchTodaySession = async () => {
+    const fetchSessionData = async () => {
       if (!user) return;
 
       try {
         setIsLoading(true);
         setError(null);
 
-        // If we have a sessionId in route params, we could use it instead
-        // of getting today's workout, but for now we'll use getTodaySession
-        const sessionData = await grpcClient.trainingService.getTodaySession(
-          user.id
-        );
+        // Prioritize using sessionId from route params if available
+        const sessionId = route.params?.sessionId;
+        let sessionData;
+
+        if (sessionId) {
+          // Here you would ideally fetch the specific session by sessionId
+          // This is just a placeholder - implement the actual call based on your API
+          sessionData = await grpcClient.trainingService.getTodaySession(
+            user.id
+          );
+          // In a production app, you'd have something like:
+          // sessionData = await grpcClient.trainingService.getSessionById(sessionId);
+        } else {
+          // Fallback to getting today's session if no sessionId provided
+          sessionData = await grpcClient.trainingService.getTodaySession(
+            user.id
+          );
+        }
 
         if (sessionData.exercises.length === 0) {
-          setError('No exercises scheduled for today');
+          setError('No exercises found for this session');
         } else {
           setExercises(sessionData.exercises);
 
@@ -84,15 +96,15 @@ export default function SessionFeedbackScreen() {
           setFormData(initialFormData);
         }
       } catch (err: any) {
-        setError(err.message || "Failed to load today's workout");
-        console.error('Error fetching today session:', err);
+        setError(err.message || 'Failed to load workout session');
+        console.error('Error fetching session data:', err);
       } finally {
         setIsLoading(false);
       }
     };
 
-    fetchTodaySession();
-  }, [user]);
+    fetchSessionData();
+  }, [user, route.params]);
 
   // Handle form field changes
   const handleFormChange = useCallback(
@@ -111,15 +123,6 @@ export default function SessionFeedbackScreen() {
     },
     []
   );
-
-  // Navigate to next exercise
-  const handleNext = useCallback(() => {
-    if (currentExerciseIndex < exercises.length - 1) {
-      setCurrentExerciseIndex((prev) => prev + 1);
-    } else {
-      setIsReviewMode(true);
-    }
-  }, [currentExerciseIndex, exercises.length]);
 
   // Validate all form data
   const validateFormData = useCallback((): boolean => {
@@ -208,17 +211,58 @@ export default function SessionFeedbackScreen() {
     }
   }, [user, formData, route.params, navigation, validateFormData]);
 
-  // Go back to exercise editing mode
-  const handleEditExercises = useCallback(() => {
-    setIsReviewMode(false);
-    setCurrentExerciseIndex(0);
+  // Toggle review mode
+  const toggleReviewMode = useCallback(() => {
+    setIsReviewMode((prev) => !prev);
   }, []);
+
+  // Render exercise item in the list
+  const renderExerciseItem = useCallback(
+    ({ item }: { item: ExerciseData }) => (
+      <ExerciseFeedbackForm
+        exercise={item}
+        feedback={formData[item.id]}
+        onChange={handleFormChange}
+        isLast={false}
+      />
+    ),
+    [formData, handleFormChange]
+  );
+
+  // Render review item in the list
+  const renderReviewItem = useCallback(
+    ({ item }: { item: ExerciseData }) => (
+      <View key={item.id} style={styles.reviewItem}>
+        <Text style={styles.reviewExerciseName}>{item.name}</Text>
+        <View style={styles.reviewDetails}>
+          <Text style={styles.reviewText}>
+            Sets: {formData[item.id]?.completedSets || '-'}
+          </Text>
+          <Text style={styles.reviewText}>
+            Reps: {formData[item.id]?.reps || '-'}
+          </Text>
+          <Text style={styles.reviewText}>
+            Weight: {formData[item.id]?.weight || '-'} kg
+          </Text>
+          <Text style={styles.reviewText}>
+            RIR: {formData[item.id]?.rir || '-'}
+          </Text>
+          {formData[item.id]?.notes ? (
+            <Text style={styles.reviewNotes}>
+              Notes: {formData[item.id].notes}
+            </Text>
+          ) : null}
+        </View>
+      </View>
+    ),
+    [formData]
+  );
 
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size='large' color='#3B82F6' />
-        <Text style={styles.loadingText}>Loading today's workout...</Text>
+        <Text style={styles.loadingText}>Loading workout session...</Text>
       </View>
     );
   }
@@ -237,93 +281,54 @@ export default function SessionFeedbackScreen() {
     );
   }
 
-  // Review mode shows all exercises
-  if (isReviewMode) {
-    return (
-      <ScrollView style={styles.container}>
-        <View style={styles.headerContainer}>
-          <Text style={styles.title}>Review Your Workout</Text>
-          <Text style={styles.subtitle}>
-            Please confirm your workout details below
-          </Text>
-        </View>
-
-        {exercises.map((exercise) => (
-          <View key={exercise.id} style={styles.reviewItem}>
-            <Text style={styles.reviewExerciseName}>{exercise.name}</Text>
-            <View style={styles.reviewDetails}>
-              <Text style={styles.reviewText}>
-                Sets: {formData[exercise.id]?.completedSets || '-'}
-              </Text>
-              <Text style={styles.reviewText}>
-                Reps: {formData[exercise.id]?.reps || '-'}
-              </Text>
-              <Text style={styles.reviewText}>
-                Weight: {formData[exercise.id]?.weight || '-'} kg
-              </Text>
-              <Text style={styles.reviewText}>
-                RIR: {formData[exercise.id]?.rir || '-'}
-              </Text>
-              {formData[exercise.id]?.notes ? (
-                <Text style={styles.reviewNotes}>
-                  Notes: {formData[exercise.id].notes}
-                </Text>
-              ) : null}
-            </View>
-          </View>
-        ))}
-
-        <View style={styles.buttonContainer}>
-          <TouchableOpacity
-            style={[styles.button, styles.secondaryButton]}
-            onPress={handleEditExercises}
-            disabled={isSubmitting}>
-            <Text style={styles.secondaryButtonText}>Edit</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.button}
-            onPress={handleSubmit}
-            disabled={isSubmitting}>
-            {isSubmitting ? (
-              <ActivityIndicator size='small' color='white' />
-            ) : (
-              <Text style={styles.buttonText}>Submit Workout</Text>
-            )}
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
-    );
-  }
-
-  // Show one exercise at a time
-  const currentExercise = exercises[currentExerciseIndex];
-
   return (
-    <ScrollView style={styles.container}>
+    <View style={styles.container}>
       <View style={styles.headerContainer}>
-        <Text style={styles.title}>Today's Workout</Text>
+        <Text style={styles.title}>
+          {isReviewMode ? 'Review Your Workout' : 'Session Feedback'}
+        </Text>
         <Text style={styles.subtitle}>
-          Exercise {currentExerciseIndex + 1} of {exercises.length}
+          {isReviewMode
+            ? 'Please confirm your workout details below'
+            : `Complete feedback for ${exercises.length} exercises`}
         </Text>
       </View>
 
-      {currentExercise && (
-        <ExerciseFeedbackForm
-          exercise={currentExercise}
-          feedback={formData[currentExercise.id]}
-          onChange={handleFormChange}
-          isLast={currentExerciseIndex === exercises.length - 1}
-          onNext={handleNext}
-        />
-      )}
+      <FlatList
+        data={exercises}
+        keyExtractor={(item) => item.id}
+        renderItem={isReviewMode ? renderReviewItem : renderExerciseItem}
+        contentContainerStyle={styles.listContainer}
+      />
 
-      <View style={styles.progressContainer}>
-        <Text style={styles.progressText}>
-          {currentExerciseIndex + 1} / {exercises.length}
-        </Text>
+      <View style={styles.buttonContainer}>
+        {isReviewMode ? (
+          <>
+            <TouchableOpacity
+              style={[styles.button, styles.secondaryButton]}
+              onPress={toggleReviewMode}
+              disabled={isSubmitting}>
+              <Text style={styles.secondaryButtonText}>Edit</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.button}
+              onPress={handleSubmit}
+              disabled={isSubmitting}>
+              {isSubmitting ? (
+                <ActivityIndicator size='small' color='white' />
+              ) : (
+                <Text style={styles.buttonText}>Submit Workout</Text>
+              )}
+            </TouchableOpacity>
+          </>
+        ) : (
+          <TouchableOpacity style={styles.button} onPress={toggleReviewMode}>
+            <Text style={styles.buttonText}>Review All</Text>
+          </TouchableOpacity>
+        )}
       </View>
-    </ScrollView>
+    </View>
   );
 }
 
@@ -346,15 +351,9 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#6B7280',
   },
-  progressContainer: {
-    alignItems: 'center',
-    marginTop: 16,
-    marginBottom: 32,
-  },
-  progressText: {
-    fontSize: 16,
-    color: '#6B7280',
-    fontWeight: '500',
+  listContainer: {
+    padding: 16,
+    paddingTop: 8,
   },
   loadingContainer: {
     flex: 1,
@@ -427,7 +426,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'white',
     borderRadius: 12,
     padding: 16,
-    marginHorizontal: 16,
     marginBottom: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
