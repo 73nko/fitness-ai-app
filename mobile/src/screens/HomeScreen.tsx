@@ -46,6 +46,14 @@ export default function HomeScreen() {
         </TouchableOpacity>
 
         <TouchableOpacity
+          className='bg-indigo-500 p-4 rounded-lg mb-3'
+          onPress={() => navigation.navigate('Progress')}>
+          <Text className='text-white font-semibold text-center'>
+            Track Your Progress
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
           className='bg-gray-200 p-4 rounded-lg'
           onPress={() => navigation.navigate('Profile')}>
           <Text className='text-text font-semibold text-center'>

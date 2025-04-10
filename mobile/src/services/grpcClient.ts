@@ -104,6 +104,25 @@ export interface SubmitSessionFeedbackResponse {
   timestamp: string;
 }
 
+export interface ExerciseLog {
+  exercise_name: string;
+  reps: string;
+  weight: number;
+  rir: number;
+  feedback: string;
+  created_at: string;
+}
+
+export interface GetUserExerciseLogsRequest {
+  user_id: string;
+  exercise_name?: string;
+  days?: number;
+}
+
+export interface GetUserExerciseLogsResponse {
+  logs: ExerciseLog[];
+}
+
 // User service interfaces
 interface UserService {
   authenticateUser: (request: LoginRequest) => Promise<AuthResponse>;
@@ -122,6 +141,9 @@ interface TrainingService {
     request: SubmitSessionFeedbackRequest
   ) => Promise<SubmitSessionFeedbackResponse>;
   getTodaySession: (userId: string) => Promise<TrainingPlanResponse>;
+  getUserExerciseLogs: (
+    request: GetUserExerciseLogsRequest
+  ) => Promise<GetUserExerciseLogsResponse>;
 }
 
 // Simplified GrpcClient class
@@ -146,6 +168,7 @@ class GrpcClient {
       generateTrainingPlan: this.generateTrainingPlan.bind(this),
       submitSessionFeedback: this.submitSessionFeedback.bind(this),
       getTodaySession: this.getTodaySession.bind(this),
+      getUserExerciseLogs: this.getUserExerciseLogs.bind(this),
     };
   }
 
@@ -480,6 +503,106 @@ class GrpcClient {
         },
       ],
     };
+  }
+
+  private async getUserExerciseLogs(
+    request: GetUserExerciseLogsRequest
+  ): Promise<GetUserExerciseLogsResponse> {
+    try {
+      // This would be a real gRPC call in production
+      console.log('Getting exercise logs for user:', request.user_id);
+
+      // Check if we have an auth token
+      if (!this.authToken) {
+        throw new Error('Authentication required');
+      }
+
+      // Simulating network delay
+      await new Promise((resolve) => setTimeout(resolve, 700));
+
+      // Mock response data
+      return {
+        logs: this.generateMockExerciseLogs(
+          request.user_id,
+          request.exercise_name,
+          request.days || 30
+        ),
+      };
+    } catch (error) {
+      console.error('Get exercise logs error:', error);
+      throw new Error('Failed to get exercise logs');
+    }
+  }
+
+  private generateMockExerciseLogs(
+    userId: string,
+    exerciseName?: string,
+    days: number = 30
+  ): ExerciseLog[] {
+    // Get a list of exercise names
+    const exerciseNames = [
+      'Bench Press',
+      'Squat',
+      'Deadlift',
+      'Pull-up',
+      'Shoulder Press',
+    ];
+
+    // If a specific exercise is requested, filter to that one
+    const exercises = exerciseName ? [exerciseName] : exerciseNames;
+
+    const logs: ExerciseLog[] = [];
+
+    // Generate mock data for each exercise
+    exercises.forEach((exercise) => {
+      // Create entries for the past 'days' days
+      for (let i = 0; i < days; i++) {
+        // Skip some days randomly to simulate not doing every exercise every session
+        if (Math.random() > 0.7) continue;
+
+        const date = new Date();
+        date.setDate(date.getDate() - i);
+
+        // For progress visualization, we'll make the weight increase slightly over time
+        // and the RIR decrease (showing improvement)
+        const baseWeight =
+          exercise === 'Bench Press'
+            ? 80
+            : exercise === 'Squat'
+              ? 100
+              : exercise === 'Deadlift'
+                ? 120
+                : exercise === 'Pull-up'
+                  ? 0
+                  : 60;
+
+        // Slight progress over time (newer dates have higher weight)
+        const weight = baseWeight - i * 0.2 + (Math.random() * 5 - 2.5);
+
+        // RIR fluctuates but trends lower (better) over time
+        const rir = Math.max(
+          0,
+          Math.min(5, Math.floor(3 - i * 0.05 + Math.random() * 2))
+        );
+
+        logs.push({
+          exercise_name: exercise,
+          reps: `${8 + Math.floor(Math.random() * 4)}`,
+          weight: parseFloat(weight.toFixed(1)),
+          rir,
+          feedback: ['Good session', 'Feeling strong', 'Challenging', 'Easy'][
+            Math.floor(Math.random() * 4)
+          ],
+          created_at: date.toISOString(),
+        });
+      }
+    });
+
+    // Sort by date, oldest first
+    return logs.sort(
+      (a, b) =>
+        new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    );
   }
 }
 
