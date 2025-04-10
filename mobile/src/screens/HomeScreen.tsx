@@ -31,9 +31,9 @@ export default function HomeScreen() {
 
         <TouchableOpacity
           className='bg-primary p-4 rounded-lg mb-3'
-          onPress={() => console.log('View Training Plan')}>
+          onPress={() => navigation.navigate('GeneratePlan')}>
           <Text className='text-white font-semibold text-center'>
-            View Training Plan
+            Create Training Plan
           </Text>
         </TouchableOpacity>
 

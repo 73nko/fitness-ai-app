@@ -73,6 +73,17 @@ export interface AuthResponse {
   user: UserProfile;
 }
 
+export interface TrainingPlanRequest {
+  userId: string;
+  name: string;
+  description: string;
+  daysPerWeek: number;
+  focusArea: string;
+  sessionDuration: number;
+  includeWarmup: boolean;
+  includeCooldown: boolean;
+}
+
 // User service interfaces
 interface UserService {
   authenticateUser: (request: LoginRequest) => Promise<AuthResponse>;
@@ -82,11 +93,19 @@ interface UserService {
   getUserProfile: (userId: string) => Promise<UserProfileResponse>;
 }
 
+// Training service interfaces
+interface TrainingService {
+  generateTrainingPlan: (
+    request: TrainingPlanRequest
+  ) => Promise<TrainingPlanResponse>;
+}
+
 // Simplified GrpcClient class
 class GrpcClient {
   private endpoint: string;
   private authToken: string | null = null;
   public userService: UserService;
+  public trainingService: TrainingService;
 
   constructor(endpoint: string) {
     this.endpoint = endpoint;
@@ -96,6 +115,11 @@ class GrpcClient {
       authenticateUser: this.authenticateUser.bind(this),
       createUserProfile: this.createUserProfile.bind(this),
       getUserProfile: this.getUserProfile.bind(this),
+    };
+
+    // Initialize the training service
+    this.trainingService = {
+      generateTrainingPlan: this.generateTrainingPlan.bind(this),
     };
   }
 
@@ -195,6 +219,75 @@ class GrpcClient {
     } catch (error) {
       console.error('Get profile error:', error);
       throw new Error('Failed to get user profile');
+    }
+  }
+
+  // Generate training plan method
+  private async generateTrainingPlan(
+    request: TrainingPlanRequest
+  ): Promise<TrainingPlanResponse> {
+    try {
+      // This would be a real gRPC call in production
+      console.log('Generating training plan for user:', request.userId);
+
+      // Check if we have an auth token
+      if (!this.authToken) {
+        throw new Error('Authentication required');
+      }
+
+      // Simulating network delay
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+
+      // Mock successful response
+      return {
+        id: '123456',
+        userId: request.userId,
+        name: request.name,
+        description: request.description,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        isActive: true,
+        generatedBy: 'AI',
+        exercises: [
+          {
+            id: 'ex1',
+            name: 'Push-up',
+            description:
+              'Standard push-up working chest, shoulders, and triceps',
+            sets: 3,
+            reps: '12-15',
+            restTime: 60,
+            notes: 'Focus on proper form',
+            dayOfWeek: 1,
+            order: 1,
+          },
+          {
+            id: 'ex2',
+            name: 'Squats',
+            description: 'Bodyweight squats for lower body',
+            sets: 3,
+            reps: '15-20',
+            restTime: 60,
+            notes: 'Engage core for stability',
+            dayOfWeek: 1,
+            order: 2,
+          },
+          {
+            id: 'ex3',
+            name: 'Plank',
+            description: 'Core stabilization exercise',
+            sets: 3,
+            reps: '30-45 seconds',
+            restTime: 45,
+            notes: 'Keep body straight',
+            dayOfWeek: 1,
+            order: 3,
+          },
+        ],
+      };
+    } catch (error) {
+      console.error('Generate training plan error:', error);
+      throw new Error('Failed to generate training plan');
     }
   }
 }

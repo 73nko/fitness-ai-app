@@ -5,7 +5,10 @@ import HomeScreen from '../screens/HomeScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import LoginScreen from '../screens/LoginScreen';
 import RegisterScreen from '../screens/RegisterScreen';
+import GeneratePlanScreen from '../screens/GeneratePlanScreen';
+import PlanSummaryScreen from '../screens/PlanSummaryScreen';
 import { useAuth } from '../context/AuthContext';
+import { TrainingPlanResponse } from '../services/grpcClient';
 
 export type RootStackParamList = {
   // Auth Screens
@@ -14,6 +17,8 @@ export type RootStackParamList = {
   // App Screens
   Home: undefined;
   Profile: undefined;
+  GeneratePlan: undefined;
+  PlanSummary: { plan: TrainingPlanResponse };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -51,6 +56,16 @@ function Navigation() {
             name='Profile'
             component={ProfileScreen}
             options={{ title: 'Your Profile' }}
+          />
+          <Stack.Screen
+            name='GeneratePlan'
+            component={GeneratePlanScreen}
+            options={{ title: 'Create Training Plan' }}
+          />
+          <Stack.Screen
+            name='PlanSummary'
+            component={PlanSummaryScreen}
+            options={{ title: 'Training Plan' }}
           />
         </>
       ) : (
