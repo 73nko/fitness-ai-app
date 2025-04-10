@@ -123,6 +123,28 @@ export interface GetUserExerciseLogsResponse {
   logs: ExerciseLog[];
 }
 
+export interface ProgressionSuggestionsRequest {
+  user_id: string;
+  training_plan_id: string;
+  history_weeks: number;
+}
+
+export interface ExerciseModificationSuggestion {
+  exercise_id: string;
+  suggestion: string;
+  new_weight?: number;
+  replace_with?: string;
+}
+
+export interface ProgressionSuggestionsResponse {
+  training_plan_id: string;
+  deload_recommended: boolean;
+  summary: string;
+  modified_exercises: ExerciseModificationSuggestion[];
+  generated_at: string;
+  model_used: string;
+}
+
 // User service interfaces
 interface UserService {
   authenticateUser: (request: LoginRequest) => Promise<AuthResponse>;
@@ -144,6 +166,9 @@ interface TrainingService {
   getUserExerciseLogs: (
     request: GetUserExerciseLogsRequest
   ) => Promise<GetUserExerciseLogsResponse>;
+  generateProgressionSuggestions: (
+    request: ProgressionSuggestionsRequest
+  ) => Promise<ProgressionSuggestionsResponse>;
 }
 
 // Simplified GrpcClient class
@@ -169,6 +194,7 @@ class GrpcClient {
       submitSessionFeedback: this.submitSessionFeedback.bind(this),
       getTodaySession: this.getTodaySession.bind(this),
       getUserExerciseLogs: this.getUserExerciseLogs.bind(this),
+      generateProgressionSuggestions: this.generateProgressionSuggestions.bind(this),
     };
   }
 
@@ -603,6 +629,56 @@ class GrpcClient {
       (a, b) =>
         new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
     );
+  }
+
+  private async generateProgressionSuggestions(
+    request: ProgressionSuggestionsRequest
+  ): Promise<ProgressionSuggestionsResponse> {
+    try {
+      // This would be a real gRPC call in production
+      console.log(
+        'Generating progression suggestions for user:',
+        request.user_id,
+        'training plan:',
+        request.training_plan_id
+      );
+
+      // Check if we have an auth token
+      if (!this.authToken) {
+        throw new Error('Authentication required');
+      }
+
+      // Simulating network delay
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+
+      // Mock response for development
+      return {
+        training_plan_id: request.training_plan_id,
+        deload_recommended: Math.random() > 0.7, // 30% chance of recommending deload
+        summary: `Based on your last ${request.history_weeks} weeks of training, you've been making steady progress. You might benefit from progressively increasing weight on compound lifts and adding volume to isolation exercises.`,
+        modified_exercises: [
+          {
+            exercise_id: 'Barbell Squat',
+            suggestion: 'Increase weight by 5kg for your working sets. Your form has been consistent.',
+            new_weight: 85,
+          },
+          {
+            exercise_id: 'Bench Press',
+            suggestion: 'You seem to be plateauing. Try increasing reps before adding weight.',
+          },
+          {
+            exercise_id: 'Lateral Raises',
+            suggestion: 'Consider replacing with Cable Lateral Raises for better tension throughout the range of motion.',
+            replace_with: 'Cable Lateral Raises',
+          },
+        ],
+        generated_at: new Date().toISOString(),
+        model_used: 'gpt-4',
+      };
+    } catch (error) {
+      console.error('Progression suggestions error:', error);
+      throw new Error('Failed to generate progression suggestions');
+    }
   }
 }
 

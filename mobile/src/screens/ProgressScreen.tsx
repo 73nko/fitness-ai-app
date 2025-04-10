@@ -232,6 +232,21 @@ export default function ProgressScreen() {
         refreshControl={
           <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} />
         }>
+        {/* Add AI Analysis button */}
+        <View style={styles.analysisButtonContainer}>
+          <TouchableOpacity
+            style={styles.analysisButton}
+            onPress={() =>
+              navigation.navigate('ProgressAnalysis', {
+                trainingPlanId: 'active-plan', // In a real app, use the active plan ID
+              })
+            }>
+            <Text style={styles.analysisButtonText}>
+              Get AI Progress Analysis
+            </Text>
+          </TouchableOpacity>
+        </View>
+
         {/* Exercise selector */}
         <View style={styles.exerciseSelector}>
           <Text style={styles.sectionTitle}>Select Exercise:</Text>
@@ -576,5 +591,25 @@ const styles = StyleSheet.create({
     color: '#666',
     fontSize: 14,
     fontStyle: 'italic',
+  },
+  analysisButtonContainer: {
+    padding: 15,
+    marginBottom: 5,
+  },
+  analysisButton: {
+    backgroundColor: '#4F46E5',
+    padding: 14,
+    borderRadius: 8,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  analysisButtonText: {
+    color: 'white',
+    fontWeight: 'bold',
+    fontSize: 15,
   },
 });

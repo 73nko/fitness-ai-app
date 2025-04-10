@@ -9,6 +9,7 @@ import GeneratePlanScreen from '../screens/GeneratePlanScreen';
 import PlanSummaryScreen from '../screens/PlanSummaryScreen';
 import SessionFeedbackScreen from '../screens/SessionFeedbackScreen';
 import ProgressScreen from '../screens/ProgressScreen';
+import ProgressAnalysisScreen from '../screens/ProgressAnalysisScreen';
 import { useAuth } from '../context/AuthContext';
 import { TrainingPlanResponse } from '../services/grpcClient';
 
@@ -23,21 +24,22 @@ export type RootStackParamList = {
   PlanSummary: { plan: TrainingPlanResponse };
   SessionFeedback: { sessionId?: string };
   Progress: undefined;
+  ProgressAnalysis: { trainingPlanId: string };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
-function Navigation() {
-  const { isAuthenticated, isLoading } = useAuth();
+export default function Navigation() {
+  const { user, isLoading } = useAuth();
 
-  // If still checking auth status, could show a splash screen or loading indicator
+  // Skip rendering until auth state is determined
   if (isLoading) {
-    return null; // Or a loading spinner component
+    return null;
   }
 
   return (
     <Stack.Navigator
-      initialRouteName={isAuthenticated ? 'Home' : 'Login'}
+      initialRouteName={user ? 'Home' : 'Login'}
       screenOptions={{
         headerShown: true,
         headerStyle: {
@@ -48,8 +50,8 @@ function Navigation() {
           fontWeight: 'bold',
         },
       }}>
-      {isAuthenticated ? (
-        // Authenticated user screens
+      {user ? (
+        // Authenticated routes
         <>
           <Stack.Screen
             name='Home'
@@ -74,37 +76,34 @@ function Navigation() {
           <Stack.Screen
             name='SessionFeedback'
             component={SessionFeedbackScreen}
-            options={{ title: "Today's Workout" }}
+            options={{ title: 'Workout Feedback' }}
           />
           <Stack.Screen
             name='Progress'
             component={ProgressScreen}
             options={{ title: 'Your Progress' }}
           />
+          <Stack.Screen
+            name='ProgressAnalysis'
+            component={ProgressAnalysisScreen}
+            options={{ title: 'Progress Analysis' }}
+          />
         </>
       ) : (
-        // Authentication screens
+        // Unauthenticated routes
         <>
           <Stack.Screen
             name='Login'
             component={LoginScreen}
-            options={{
-              title: 'Sign In',
-              headerShown: false,
-            }}
+            options={{ headerShown: false }}
           />
           <Stack.Screen
             name='Register'
             component={RegisterScreen}
-            options={{
-              title: 'Create Account',
-              headerShown: false,
-            }}
+            options={{ headerShown: false }}
           />
         </>
       )}
     </Stack.Navigator>
   );
 }
-
-export default Navigation;

@@ -62,11 +62,13 @@ mobile/
       LoginScreen.tsx
       PlanSummaryScreen.tsx
       ProfileScreen.tsx
+      ProgressAnalysisScreen.tsx
       ProgressScreen.tsx
       RegisterScreen.tsx
       SessionFeedbackScreen.tsx
     services/
       grpcClient.ts
+      progressService.ts
     utils/
       nativewind-setup.ts
       validation.ts
@@ -175,263 +177,113 @@ web.Dockerfile
 <files>
 This section contains the contents of the repository's files.
 
-<file path="mobile/src/components/ExerciseChart.tsx">
-import React from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  Dimensions,
-  TouchableOpacity,
-} from 'react-native';
-import { LineChart } from 'react-native-chart-kit';
-import { ExerciseLog } from '../services/grpcClient';
-
-interface ExerciseChartProps {
-  exerciseLogs: ExerciseLog[];
-  metric: 'weight' | 'rir';
-  title: string;
-  days?: number;
-}
-
-export function ExerciseChart({
-  exerciseLogs,
-  metric,
-  title,
-  days = 30,
-}: ExerciseChartProps) {
-  // Filter logs to show only requested days
-  const filteredLogs = React.useMemo(() => {
-    if (!exerciseLogs.length) return [];
-
-    const now = new Date();
-    now.setHours(0, 0, 0, 0);
-
-    const cutoffDate = new Date();
-    cutoffDate.setDate(now.getDate() - days);
-    cutoffDate.setHours(0, 0, 0, 0);
-
-    return exerciseLogs.filter(
-      (log) => new Date(log.created_at).getTime() >= cutoffDate.getTime()
-    );
-  }, [exerciseLogs, days]);
-
-  // Format data for chart
-  const chartData = React.useMemo(() => {
-    if (!filteredLogs.length) return { labels: [], datasets: [{ data: [] }] };
-
-    // Sort logs by date (asc)
-    const sortedLogs = [...filteredLogs].sort(
-      (a, b) =>
-        new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-    );
-
-    // Extract dates for labels (format: "MM/DD")
-    const labels = sortedLogs.map((log) => {
-      const date = new Date(log.created_at);
-      return `${date.getMonth() + 1}/${date.getDate()}`;
-    });
-
-    // Extract metric values - handle custom min/max since chart doesn't support yMin/yMax
-    let data;
-
-    if (metric === 'weight') {
-      // For weight, we want a bit of padding to show progress better
-      const values = sortedLogs.map((log) => log.weight);
-      const minValue = Math.min(...values);
-      const maxValue = Math.max(...values);
-      // Add some padding for visual clarity if there's enough range
-      const hasRange = maxValue - minValue > 5;
-
-      // Add padding if there's a decent range
-      data = hasRange
-        ? sortedLogs.map((log) => log.weight)
-        : sortedLogs.map((log) => log.weight);
-    } else {
-      // For RIR, we always want 0-5 scale
-      data = sortedLogs.map((log) => log.rir);
-    }
-
-    return {
-      labels,
-      datasets: [{ data }],
-    };
-  }, [filteredLogs, metric]);
-
-  // Show message when no data
-  if (!filteredLogs.length) {
-    return (
-      <View style={styles.noDataContainer}>
-        <Text style={styles.noDataText}>
-          No data available for this exercise
-        </Text>
-      </View>
-    );
-  }
-
-  return (
-    <View style={styles.container}>
-      <Text style={styles.title}>
-        {title} ({metric === 'weight' ? 'Weight (kg)' : 'RIR'})
-      </Text>
-      <LineChart
-        data={chartData}
-        width={Dimensions.get('window').width - 40}
-        height={220}
-        chartConfig={{
-          backgroundColor: '#e26a00',
-          backgroundGradientFrom: '#3B82F6',
-          backgroundGradientTo: '#2563EB',
-          decimalPlaces: metric === 'weight' ? 1 : 0,
-          color: (opacity = 1) => `rgba(255, 255, 255, ${opacity})`,
-          labelColor: (opacity = 1) => `rgba(255, 255, 255, ${opacity})`,
-          style: {
-            borderRadius: 16,
-          },
-          propsForDots: {
-            r: '6',
-            strokeWidth: '2',
-            stroke: '#1E40AF',
-          },
-        }}
-        style={styles.chart}
-        yAxisLabel={metric === 'weight' ? '' : ''}
-        yAxisSuffix={metric === 'weight' ? ' kg' : ''}
-        bezier
-        fromZero={metric === 'rir'}
-        segments={metric === 'rir' ? 5 : 4}
-      />
-    </View>
-  );
-}
-
-const styles = StyleSheet.create({
-  container: {
-    marginVertical: 10,
-    padding: 10,
-    backgroundColor: '#fff',
-    borderRadius: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 2,
-  },
-  title: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginBottom: 10,
-    textAlign: 'center',
-  },
-  chart: {
-    borderRadius: 16,
-    paddingRight: 0,
-  },
-  noDataContainer: {
-    backgroundColor: '#fff',
-    borderRadius: 10,
-    padding: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginVertical: 10,
-    height: 150,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 2,
-  },
-  noDataText: {
-    fontSize: 14,
-    color: '#666',
-  },
-});
-</file>
-
-<file path="mobile/src/screens/ProgressScreen.tsx">
+<file path="mobile/src/screens/ProgressAnalysisScreen.tsx">
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
-  ActivityIndicator,
   TouchableOpacity,
+  ActivityIndicator,
   RefreshControl,
   SafeAreaView,
+  Alert,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 import { RootStackParamList } from '../navigation';
 import { useAuth } from '../context/AuthContext';
-import grpcClient, {
-  ExerciseLog,
-  GetUserExerciseLogsRequest,
-} from '../services/grpcClient';
-import { ExerciseChart } from '../components/ExerciseChart';
+import {
+  getProgressionSuggestions,
+  ProgressionSuggestionsResponse,
+  ExerciseModificationSuggestion,
+} from '../services/progressService';
 
-// Time range options for filtering
-const TIME_RANGES = [
-  { label: '7D', days: 7 },
-  { label: '30D', days: 30 },
-  { label: '90D', days: 90 },
-  { label: 'All', days: 365 },
-];
+// Card component for modified exercises
+interface SuggestionCardProps {
+  suggestion: ExerciseModificationSuggestion;
+  isDeloadRecommended: boolean;
+}
 
-// Metric options for viewing
-const METRICS: { label: string; value: 'weight' | 'rir' }[] = [
-  { label: 'Weight', value: 'weight' },
-  { label: 'RIR', value: 'rir' },
-];
+function SuggestionCard({
+  suggestion,
+  isDeloadRecommended,
+}: SuggestionCardProps) {
+  const [isExpanded, setIsExpanded] = useState(false);
 
-type ProgressScreenNavigationProp = NativeStackNavigationProp<
+  return (
+    <TouchableOpacity
+      style={styles.suggestionCard}
+      onPress={() => setIsExpanded(!isExpanded)}
+      activeOpacity={0.8}>
+      <View style={styles.cardHeader}>
+        <Text style={styles.exerciseName}>{suggestion.exercise_id}</Text>
+        {suggestion.replace_with && (
+          <View style={styles.replaceBadge}>
+            <Text style={styles.replaceBadgeText}>Replace</Text>
+          </View>
+        )}
+        {isDeloadRecommended && (
+          <View style={styles.deloadBadge}>
+            <Text style={styles.deloadBadgeText}>Deload</Text>
+          </View>
+        )}
+      </View>
+
+      <Text style={styles.suggestionText}>{suggestion.suggestion}</Text>
+
+      {isExpanded && (
+        <View style={styles.cardDetails}>
+          {suggestion.new_weight && (
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Recommended Weight:</Text>
+              <Text style={styles.detailValue}>{suggestion.new_weight} kg</Text>
+            </View>
+          )}
+          {suggestion.replace_with && (
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Replace With:</Text>
+              <Text style={styles.detailValue}>{suggestion.replace_with}</Text>
+            </View>
+          )}
+        </View>
+      )}
+
+      <Text style={styles.expandHint}>
+        {isExpanded ? 'Tap to collapse' : 'Tap to expand'}
+      </Text>
+    </TouchableOpacity>
+  );
+}
+
+type ProgressAnalysisScreenRouteProp = RouteProp<
   RootStackParamList,
-  'Progress'
+  'ProgressAnalysis'
 >;
 
-export default function ProgressScreen() {
-  const navigation = useNavigation<ProgressScreenNavigationProp>();
+type ProgressAnalysisScreenNavigationProp = NativeStackNavigationProp<
+  RootStackParamList,
+  'ProgressAnalysis'
+>;
+
+export default function ProgressAnalysisScreen() {
+  const navigation = useNavigation<ProgressAnalysisScreenNavigationProp>();
+  const route = useRoute<ProgressAnalysisScreenRouteProp>();
   const { user } = useAuth();
 
+  const [analysis, setAnalysis] =
+    useState<ProgressionSuggestionsResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [exerciseLogs, setExerciseLogs] = useState<ExerciseLog[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [selectedDays, setSelectedDays] = useState(30);
-  const [selectedMetric, setSelectedMetric] = useState<'weight' | 'rir'>(
-    'weight'
-  );
-  const [selectedExercise, setSelectedExercise] = useState<string | null>(null);
 
-  // Group logs by exercise name for easy access
-  const exerciseGroups = React.useMemo(() => {
-    const groups: { [key: string]: ExerciseLog[] } = {};
+  // Use the most active training plan or the one from route params
+  const trainingPlanId = route.params?.trainingPlanId || '';
 
-    exerciseLogs.forEach((log) => {
-      if (!groups[log.exercise_name]) {
-        groups[log.exercise_name] = [];
-      }
-      groups[log.exercise_name].push(log);
-    });
-
-    return groups;
-  }, [exerciseLogs]);
-
-  // Get list of unique exercise names
-  const exerciseNames = React.useMemo(() => {
-    return Object.keys(exerciseGroups).sort();
-  }, [exerciseGroups]);
-
-  // Set first exercise as selected if none is selected and we have data
-  useEffect(() => {
-    if (exerciseNames.length > 0 && !selectedExercise) {
-      setSelectedExercise(exerciseNames[0]);
-    }
-  }, [exerciseNames, selectedExercise]);
-
-  // Fetch data from API
-  const fetchExerciseLogs = useCallback(
+  // Function to fetch progression suggestions from API
+  const fetchAnalysis = useCallback(
     async (isRefresh = false) => {
       if (!user) return;
 
@@ -439,49 +291,65 @@ export default function ProgressScreen() {
         if (!isRefresh) setIsLoading(true);
         setError(null);
 
-        const request: GetUserExerciseLogsRequest = {
-          user_id: user.id,
-          days: 365, // Get all data and filter client-side
-        };
+        // Check if we have a training plan ID
+        if (!trainingPlanId) {
+          throw new Error('No training plan selected');
+        }
 
-        const response = await grpcClient.trainingService.getUserExerciseLogs(
-          request
-        );
-        setExerciseLogs(response.logs);
+        const response = await getProgressionSuggestions({
+          userId: user.id,
+          trainingPlanId,
+        });
+
+        setAnalysis(response);
       } catch (err: any) {
-        setError(err.message || 'Failed to load exercise data');
-        console.error('Error fetching exercise logs:', err);
+        setError(err.message || 'Failed to fetch analysis');
+        console.error('Error fetching progression suggestions:', err);
       } finally {
         setIsLoading(false);
         if (isRefresh) setIsRefreshing(false);
       }
     },
-    [user]
+    [user, trainingPlanId]
   );
 
   // Initial data load
   useEffect(() => {
-    fetchExerciseLogs();
-  }, [fetchExerciseLogs]);
+    fetchAnalysis();
+  }, [fetchAnalysis]);
 
-  // Handle pull-to-refresh
+  // Handle refresh
   const handleRefresh = useCallback(() => {
     setIsRefreshing(true);
-    fetchExerciseLogs(true);
-  }, [fetchExerciseLogs]);
+    fetchAnalysis(true);
+  }, [fetchAnalysis]);
 
-  // Get logs for selected exercise
-  const selectedExerciseLogs = React.useMemo(() => {
-    if (!selectedExercise) return [];
-    return exerciseGroups[selectedExercise] || [];
-  }, [exerciseGroups, selectedExercise]);
+  // Handle regeneration of analysis
+  const handleRegenerateAnalysis = () => {
+    Alert.alert(
+      'Regenerate Analysis',
+      'This will request a new AI analysis of your recent progress. Continue?',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Regenerate',
+          onPress: () => fetchAnalysis(),
+        },
+      ]
+    );
+  };
 
   // Loading state
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size='large' color='#3B82F6' />
-        <Text style={styles.loadingText}>Loading your progress data...</Text>
+        <Text style={styles.loadingText}>
+          Analyzing your progress data with AI...
+        </Text>
       </View>
     );
   }
@@ -490,303 +358,147 @@ export default function ProgressScreen() {
   if (error) {
     return (
       <View style={styles.errorContainer}>
-        <Text style={styles.errorTitle}>Oops!</Text>
+        <Text style={styles.errorTitle}>Analysis Error</Text>
         <Text style={styles.errorText}>{error}</Text>
-        <TouchableOpacity
-          style={styles.button}
-          onPress={() => fetchExerciseLogs()}>
+        <TouchableOpacity style={styles.button} onPress={() => fetchAnalysis()}>
           <Text style={styles.buttonText}>Try Again</Text>
         </TouchableOpacity>
       </View>
     );
   }
 
-  // Empty state
-  if (exerciseNames.length === 0) {
+  // Empty state - No analysis data
+  if (!analysis) {
     return (
       <ScrollView
         contentContainerStyle={styles.emptyContainer}
         refreshControl={
           <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} />
         }>
-        <Text style={styles.emptyTitle}>No Progress Data Yet</Text>
+        <Text style={styles.emptyTitle}>No Analysis Available</Text>
         <Text style={styles.emptyText}>
-          Complete workouts and log your exercises to see your progress over
-          time.
+          We need more workout data to provide a meaningful analysis. Keep
+          logging your workouts!
         </Text>
         <TouchableOpacity
           style={styles.button}
-          onPress={() => navigation.navigate('Home')}>
-          <Text style={styles.buttonText}>Go to Workouts</Text>
+          onPress={() => navigation.navigate('Progress')}>
+          <Text style={styles.buttonText}>Back to Progress</Text>
         </TouchableOpacity>
       </ScrollView>
     );
   }
 
+  // Format date for display
+  const analysisDate = new Date(analysis.generated_at).toLocaleDateString(
+    undefined,
+    {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    }
+  );
+
   return (
     <SafeAreaView style={styles.container}>
-      {/* Time range selector */}
-      <View style={styles.filterContainer}>
-        <View style={styles.filterRow}>
-          <Text style={styles.filterLabel}>Time Range:</Text>
-          <View style={styles.filterOptions}>
-            {TIME_RANGES.map((range) => (
-              <TouchableOpacity
-                key={range.label}
-                style={[
-                  styles.filterOption,
-                  selectedDays === range.days && styles.filterOptionSelected,
-                ]}
-                onPress={() => setSelectedDays(range.days)}>
-                <Text
-                  style={[
-                    styles.filterOptionText,
-                    selectedDays === range.days &&
-                      styles.filterOptionTextSelected,
-                  ]}>
-                  {range.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-
-        {/* Metric selector */}
-        <View style={styles.filterRow}>
-          <Text style={styles.filterLabel}>Metric:</Text>
-          <View style={styles.filterOptions}>
-            {METRICS.map((metric) => (
-              <TouchableOpacity
-                key={metric.label}
-                style={[
-                  styles.filterOption,
-                  selectedMetric === metric.value &&
-                    styles.filterOptionSelected,
-                ]}
-                onPress={() => setSelectedMetric(metric.value)}>
-                <Text
-                  style={[
-                    styles.filterOptionText,
-                    selectedMetric === metric.value &&
-                      styles.filterOptionTextSelected,
-                  ]}>
-                  {metric.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-      </View>
-
-      {/* Exercise selector and chart */}
       <ScrollView
         refreshControl={
           <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} />
         }>
-        {/* Exercise selector */}
-        <View style={styles.exerciseSelector}>
-          <Text style={styles.sectionTitle}>Select Exercise:</Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.exerciseButtonsContainer}>
-            {exerciseNames.map((exerciseName) => (
-              <TouchableOpacity
-                key={exerciseName}
-                style={[
-                  styles.exerciseButton,
-                  selectedExercise === exerciseName &&
-                    styles.exerciseButtonSelected,
-                ]}
-                onPress={() => setSelectedExercise(exerciseName)}>
-                <Text
-                  style={[
-                    styles.exerciseButtonText,
-                    selectedExercise === exerciseName &&
-                      styles.exerciseButtonTextSelected,
-                  ]}>
-                  {exerciseName}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
+        {/* Header section */}
+        <View style={styles.headerContainer}>
+          <View style={styles.headerRow}>
+            <Text style={styles.title}>AI Progress Analysis</Text>
+            {analysis.deload_recommended && (
+              <View style={styles.deloadBadge}>
+                <Text style={styles.deloadBadgeText}>Deload Recommended</Text>
+              </View>
+            )}
+          </View>
+          <Text style={styles.subtitle}>
+            Generated on {analysisDate} · {analysis.model_used}
+          </Text>
         </View>
 
-        {/* Show chart for selected exercise */}
-        {selectedExercise && (
-          <View style={styles.chartContainer}>
-            <ExerciseChart
-              exerciseLogs={selectedExerciseLogs}
-              metric={selectedMetric}
-              title={selectedExercise}
-              days={selectedDays}
-            />
+        {/* Summary section */}
+        <View style={styles.summaryContainer}>
+          <Text style={styles.sectionTitle}>Summary</Text>
+          <Text style={styles.summaryText}>{analysis.summary}</Text>
+        </View>
 
-            {/* Summary stats */}
-            <View style={styles.statsContainer}>
-              <StatsCard
-                exerciseLogs={selectedExerciseLogs}
-                metric={selectedMetric}
-                days={selectedDays}
+        {/* Exercise suggestions section */}
+        <View style={styles.suggestionsContainer}>
+          <Text style={styles.sectionTitle}>Exercise Recommendations</Text>
+          {analysis.modified_exercises.length === 0 ? (
+            <Text style={styles.noSuggestionsText}>
+              No specific exercise recommendations at this time. Continue with
+              your current plan.
+            </Text>
+          ) : (
+            analysis.modified_exercises.map((suggestion, index) => (
+              <SuggestionCard
+                key={`${suggestion.exercise_id}-${index}`}
+                suggestion={suggestion}
+                isDeloadRecommended={analysis.deload_recommended}
               />
-            </View>
-          </View>
-        )}
+            ))
+          )}
+        </View>
+
+        {/* Regenerate button */}
+        <View style={styles.buttonContainer}>
+          <TouchableOpacity
+            style={styles.regenerateButton}
+            onPress={handleRegenerateAnalysis}>
+            <Text style={styles.buttonText}>Regenerate Analysis</Text>
+          </TouchableOpacity>
+        </View>
       </ScrollView>
     </SafeAreaView>
-  );
-}
-
-// Simple stats component
-interface StatsCardProps {
-  exerciseLogs: ExerciseLog[];
-  metric: 'weight' | 'rir';
-  days: number;
-}
-
-function StatsCard({ exerciseLogs, metric, days }: StatsCardProps) {
-  // Filter logs by days
-  const filteredLogs = React.useMemo(() => {
-    if (!exerciseLogs.length) return [];
-
-    const now = new Date();
-    now.setHours(0, 0, 0, 0);
-
-    const cutoffDate = new Date();
-    cutoffDate.setDate(now.getDate() - days);
-    cutoffDate.setHours(0, 0, 0, 0);
-
-    return exerciseLogs.filter(
-      (log) => new Date(log.created_at).getTime() >= cutoffDate.getTime()
-    );
-  }, [exerciseLogs, days]);
-
-  if (filteredLogs.length === 0) {
-    return (
-      <View style={styles.statsCard}>
-        <Text style={styles.statsTitle}>Statistics</Text>
-        <Text style={styles.noStatsText}>
-          No data available for selected period
-        </Text>
-      </View>
-    );
-  }
-
-  // Get metric values
-  const values = filteredLogs.map((log) =>
-    metric === 'weight' ? log.weight : log.rir
-  );
-
-  // Calculate stats
-  const currentValue = values[values.length - 1];
-  const startingValue = values[0];
-  const maxValue = Math.max(...values);
-  const avgValue = values.reduce((a, b) => a + b, 0) / values.length;
-
-  // Calculate change
-  const change = currentValue - startingValue;
-  const changePercent =
-    startingValue !== 0 ? (change / startingValue) * 100 : 0;
-
-  // For RIR, lower is better. For weight, higher is better.
-  const isPositiveChange = metric === 'weight' ? change > 0 : change < 0;
-
-  return (
-    <View style={styles.statsCard}>
-      <Text style={styles.statsTitle}>Statistics</Text>
-      <View style={styles.statsGrid}>
-        <View style={styles.statItem}>
-          <Text style={styles.statLabel}>Current</Text>
-          <Text style={styles.statValue}>
-            {currentValue.toFixed(metric === 'weight' ? 1 : 0)}
-            {metric === 'weight' ? ' kg' : ''}
-          </Text>
-        </View>
-
-        <View style={styles.statItem}>
-          <Text style={styles.statLabel}>Starting</Text>
-          <Text style={styles.statValue}>
-            {startingValue.toFixed(metric === 'weight' ? 1 : 0)}
-            {metric === 'weight' ? ' kg' : ''}
-          </Text>
-        </View>
-
-        <View style={styles.statItem}>
-          <Text style={styles.statLabel}>Change</Text>
-          <Text
-            style={[
-              styles.statValue,
-              isPositiveChange ? styles.positiveChange : styles.negativeChange,
-            ]}>
-            {change > 0 ? '+' : ''}
-            {change.toFixed(metric === 'weight' ? 1 : 0)}
-            {metric === 'weight' ? ' kg' : ''}
-          </Text>
-        </View>
-
-        <View style={styles.statItem}>
-          <Text style={styles.statLabel}>Max</Text>
-          <Text style={styles.statValue}>
-            {maxValue.toFixed(metric === 'weight' ? 1 : 0)}
-            {metric === 'weight' ? ' kg' : ''}
-          </Text>
-        </View>
-
-        <View style={styles.statItem}>
-          <Text style={styles.statLabel}>Average</Text>
-          <Text style={styles.statValue}>
-            {avgValue.toFixed(metric === 'weight' ? 1 : 0)}
-            {metric === 'weight' ? ' kg' : ''}
-          </Text>
-        </View>
-
-        <View style={styles.statItem}>
-          <Text style={styles.statLabel}>Sessions</Text>
-          <Text style={styles.statValue}>{filteredLogs.length}</Text>
-        </View>
-      </View>
-    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#F3F4F6',
   },
   loadingContainer: {
     flex: 1,
-    alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#f5f5f5',
+    alignItems: 'center',
+    backgroundColor: '#F3F4F6',
+    padding: 20,
   },
   loadingText: {
-    marginTop: 10,
+    marginTop: 16,
     fontSize: 16,
-    color: '#666',
+    color: '#4B5563',
+    textAlign: 'center',
   },
   errorContainer: {
     flex: 1,
-    alignItems: 'center',
     justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F3F4F6',
     padding: 20,
-    backgroundColor: '#f5f5f5',
   },
   errorTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    marginBottom: 10,
+    color: '#EF4444',
+    marginBottom: 8,
   },
   errorText: {
-    fontSize: 16,
     textAlign: 'center',
-    marginBottom: 20,
-    color: '#666',
+    fontSize: 16,
+    color: '#4B5563',
+    marginBottom: 24,
   },
   emptyContainer: {
     flex: 1,
-    alignItems: 'center',
     justifyContent: 'center',
+    alignItems: 'center',
     padding: 20,
   },
   emptyTitle: {
@@ -800,135 +512,237 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     color: '#666',
   },
-  button: {
-    backgroundColor: '#3B82F6',
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 8,
-  },
-  buttonText: {
-    color: 'white',
-    fontWeight: 'bold',
-    fontSize: 16,
-  },
-  filterContainer: {
+  headerContainer: {
+    padding: 16,
     backgroundColor: 'white',
-    padding: 15,
+    marginBottom: 12,
+    borderRadius: 8,
+    margin: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 2,
     elevation: 2,
   },
-  filterRow: {
+  headerRow: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 10,
   },
-  filterLabel: {
-    width: 100,
-    fontSize: 16,
+  title: {
+    fontSize: 24,
     fontWeight: 'bold',
+    color: '#111827',
   },
-  filterOptions: {
-    flex: 1,
-    flexDirection: 'row',
-  },
-  filterOption: {
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 20,
-    marginRight: 8,
-    backgroundColor: '#f0f0f0',
-  },
-  filterOptionSelected: {
-    backgroundColor: '#3B82F6',
-  },
-  filterOptionText: {
+  subtitle: {
     fontSize: 14,
+    color: '#6B7280',
+    marginTop: 4,
   },
-  filterOptionTextSelected: {
-    color: 'white',
-    fontWeight: 'bold',
-  },
-  exerciseSelector: {
-    padding: 15,
+  summaryContainer: {
+    padding: 16,
+    backgroundColor: 'white',
+    marginHorizontal: 16,
+    borderRadius: 8,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 2,
   },
   sectionTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    marginBottom: 10,
+    marginBottom: 8,
+    color: '#1F2937',
   },
-  exerciseButtonsContainer: {
-    paddingRight: 15,
+  summaryText: {
+    fontSize: 16,
+    lineHeight: 24,
+    color: '#4B5563',
   },
-  exerciseButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    marginRight: 8,
-    backgroundColor: '#f0f0f0',
-  },
-  exerciseButtonSelected: {
-    backgroundColor: '#3B82F6',
-  },
-  exerciseButtonText: {
-    fontSize: 14,
-  },
-  exerciseButtonTextSelected: {
-    color: 'white',
-    fontWeight: 'bold',
-  },
-  chartContainer: {
-    paddingHorizontal: 15,
-    marginBottom: 20,
-  },
-  statsContainer: {
-    marginTop: 10,
-  },
-  statsCard: {
+  suggestionsContainer: {
+    padding: 16,
     backgroundColor: 'white',
-    borderRadius: 10,
-    padding: 15,
+    marginHorizontal: 16,
+    borderRadius: 8,
+    marginBottom: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.05,
     shadowRadius: 2,
     elevation: 2,
   },
-  statsTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginBottom: 10,
-  },
-  statsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-  },
-  statItem: {
-    width: '33%',
+  suggestionCard: {
+    backgroundColor: '#F9FAFB',
+    borderRadius: 8,
+    padding: 16,
     marginBottom: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: '#3B82F6',
   },
-  statLabel: {
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  exerciseName: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#111827',
+    flex: 1,
+  },
+  suggestionText: {
+    fontSize: 14,
+    color: '#4B5563',
+    lineHeight: 20,
+  },
+  cardDetails: {
+    marginTop: 12,
+    backgroundColor: '#EFF6FF',
+    padding: 12,
+    borderRadius: 6,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  detailLabel: {
+    fontSize: 14,
+    color: '#6B7280',
+  },
+  detailValue: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#1F2937',
+  },
+  expandHint: {
     fontSize: 12,
-    color: '#666',
+    color: '#9CA3AF',
+    textAlign: 'center',
+    marginTop: 8,
   },
-  statValue: {
+  buttonContainer: {
+    padding: 16,
+    marginBottom: 24,
+  },
+  button: {
+    backgroundColor: '#3B82F6',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 1.5,
+    elevation: 2,
+  },
+  buttonText: {
+    color: 'white',
     fontSize: 16,
     fontWeight: 'bold',
   },
-  positiveChange: {
-    color: '#22c55e',
+  regenerateButton: {
+    backgroundColor: '#4F46E5',
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 1.5,
+    elevation: 2,
   },
-  negativeChange: {
-    color: '#ef4444',
+  deloadBadge: {
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 16,
+    marginLeft: 8,
   },
-  noStatsText: {
-    color: '#666',
+  deloadBadgeText: {
+    color: '#92400E',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  replaceBadge: {
+    backgroundColor: '#DBEAFE',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 16,
+    marginLeft: 8,
+  },
+  replaceBadgeText: {
+    color: '#1E40AF',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  noSuggestionsText: {
     fontSize: 14,
+    color: '#6B7280',
     fontStyle: 'italic',
+    textAlign: 'center',
+    marginTop: 8,
   },
 });
+</file>
+
+<file path="mobile/src/services/progressService.ts">
+import grpcClient from './grpcClient';
+
+export interface ProgressionSuggestionsRequest {
+  user_id: string;
+  training_plan_id: string;
+  history_weeks: number;
+}
+
+export interface ExerciseModificationSuggestion {
+  exercise_id: string;
+  suggestion: string;
+  new_weight?: number;
+  replace_with?: string;
+}
+
+export interface ProgressionSuggestionsResponse {
+  training_plan_id: string;
+  deload_recommended: boolean;
+  summary: string;
+  modified_exercises: ExerciseModificationSuggestion[];
+  generated_at: string;
+  model_used: string;
+}
+
+interface GetProgressionSuggestionsParams {
+  userId: string;
+  trainingPlanId: string;
+  historyWeeks?: number;
+}
+
+/**
+ * Get AI-generated progression suggestions for a user's training plan
+ */
+export async function getProgressionSuggestions({
+  userId,
+  trainingPlanId,
+  historyWeeks = 4, // Default to 4 weeks of history
+}: GetProgressionSuggestionsParams): Promise<ProgressionSuggestionsResponse> {
+  const request: ProgressionSuggestionsRequest = {
+    user_id: userId,
+    training_plan_id: trainingPlanId,
+    history_weeks: historyWeeks,
+  };
+
+  return await grpcClient.trainingService.generateProgressionSuggestions(
+    request
+  );
+}
 </file>
 
 <file path="mobile/src/components/Button.tsx">
@@ -1108,6 +922,179 @@ export default function ExerciseCard({ exercise }: ExerciseCardProps) {
     </View>
   );
 }
+</file>
+
+<file path="mobile/src/components/ExerciseChart.tsx">
+import React from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  Dimensions,
+  TouchableOpacity,
+} from 'react-native';
+import { LineChart } from 'react-native-chart-kit';
+import { ExerciseLog } from '../services/grpcClient';
+
+interface ExerciseChartProps {
+  exerciseLogs: ExerciseLog[];
+  metric: 'weight' | 'rir';
+  title: string;
+  days?: number;
+}
+
+export function ExerciseChart({
+  exerciseLogs,
+  metric,
+  title,
+  days = 30,
+}: ExerciseChartProps) {
+  // Filter logs to show only requested days
+  const filteredLogs = React.useMemo(() => {
+    if (!exerciseLogs.length) return [];
+
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+
+    const cutoffDate = new Date();
+    cutoffDate.setDate(now.getDate() - days);
+    cutoffDate.setHours(0, 0, 0, 0);
+
+    return exerciseLogs.filter(
+      (log) => new Date(log.created_at).getTime() >= cutoffDate.getTime()
+    );
+  }, [exerciseLogs, days]);
+
+  // Format data for chart
+  const chartData = React.useMemo(() => {
+    if (!filteredLogs.length) return { labels: [], datasets: [{ data: [] }] };
+
+    // Sort logs by date (asc)
+    const sortedLogs = [...filteredLogs].sort(
+      (a, b) =>
+        new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    );
+
+    // Extract dates for labels (format: "MM/DD")
+    const labels = sortedLogs.map((log) => {
+      const date = new Date(log.created_at);
+      return `${date.getMonth() + 1}/${date.getDate()}`;
+    });
+
+    // Extract metric values - handle custom min/max since chart doesn't support yMin/yMax
+    let data;
+
+    if (metric === 'weight') {
+      // For weight, we want a bit of padding to show progress better
+      const values = sortedLogs.map((log) => log.weight);
+      const minValue = Math.min(...values);
+      const maxValue = Math.max(...values);
+      // Add some padding for visual clarity if there's enough range
+      const hasRange = maxValue - minValue > 5;
+
+      // Add padding if there's a decent range
+      data = hasRange
+        ? sortedLogs.map((log) => log.weight)
+        : sortedLogs.map((log) => log.weight);
+    } else {
+      // For RIR, we always want 0-5 scale
+      data = sortedLogs.map((log) => log.rir);
+    }
+
+    return {
+      labels,
+      datasets: [{ data }],
+    };
+  }, [filteredLogs, metric]);
+
+  // Show message when no data
+  if (!filteredLogs.length) {
+    return (
+      <View style={styles.noDataContainer}>
+        <Text style={styles.noDataText}>
+          No data available for this exercise
+        </Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.container}>
+      <Text style={styles.title}>
+        {title} ({metric === 'weight' ? 'Weight (kg)' : 'RIR'})
+      </Text>
+      <LineChart
+        data={chartData}
+        width={Dimensions.get('window').width - 40}
+        height={220}
+        chartConfig={{
+          backgroundColor: '#e26a00',
+          backgroundGradientFrom: '#3B82F6',
+          backgroundGradientTo: '#2563EB',
+          decimalPlaces: metric === 'weight' ? 1 : 0,
+          color: (opacity = 1) => `rgba(255, 255, 255, ${opacity})`,
+          labelColor: (opacity = 1) => `rgba(255, 255, 255, ${opacity})`,
+          style: {
+            borderRadius: 16,
+          },
+          propsForDots: {
+            r: '6',
+            strokeWidth: '2',
+            stroke: '#1E40AF',
+          },
+        }}
+        style={styles.chart}
+        yAxisLabel={metric === 'weight' ? '' : ''}
+        yAxisSuffix={metric === 'weight' ? ' kg' : ''}
+        bezier
+        fromZero={metric === 'rir'}
+        segments={metric === 'rir' ? 5 : 4}
+      />
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    marginVertical: 10,
+    padding: 10,
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  title: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 10,
+    textAlign: 'center',
+  },
+  chart: {
+    borderRadius: 16,
+    paddingRight: 0,
+  },
+  noDataContainer: {
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    padding: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginVertical: 10,
+    height: 150,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  noDataText: {
+    fontSize: 14,
+    color: '#666',
+  },
+});
 </file>
 
 <file path="mobile/src/components/ExerciseFeedbackForm.tsx">
@@ -2045,6 +2032,624 @@ export default function ProfileScreen() {
     </ScrollView>
   );
 }
+</file>
+
+<file path="mobile/src/screens/ProgressScreen.tsx">
+import React, { useState, useEffect, useCallback } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  ActivityIndicator,
+  TouchableOpacity,
+  RefreshControl,
+  SafeAreaView,
+} from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+
+import { RootStackParamList } from '../navigation';
+import { useAuth } from '../context/AuthContext';
+import grpcClient, {
+  ExerciseLog,
+  GetUserExerciseLogsRequest,
+} from '../services/grpcClient';
+import { ExerciseChart } from '../components/ExerciseChart';
+
+// Time range options for filtering
+const TIME_RANGES = [
+  { label: '7D', days: 7 },
+  { label: '30D', days: 30 },
+  { label: '90D', days: 90 },
+  { label: 'All', days: 365 },
+];
+
+// Metric options for viewing
+const METRICS: { label: string; value: 'weight' | 'rir' }[] = [
+  { label: 'Weight', value: 'weight' },
+  { label: 'RIR', value: 'rir' },
+];
+
+type ProgressScreenNavigationProp = NativeStackNavigationProp<
+  RootStackParamList,
+  'Progress'
+>;
+
+export default function ProgressScreen() {
+  const navigation = useNavigation<ProgressScreenNavigationProp>();
+  const { user } = useAuth();
+
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [exerciseLogs, setExerciseLogs] = useState<ExerciseLog[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedDays, setSelectedDays] = useState(30);
+  const [selectedMetric, setSelectedMetric] = useState<'weight' | 'rir'>(
+    'weight'
+  );
+  const [selectedExercise, setSelectedExercise] = useState<string | null>(null);
+
+  // Group logs by exercise name for easy access
+  const exerciseGroups = React.useMemo(() => {
+    const groups: { [key: string]: ExerciseLog[] } = {};
+
+    exerciseLogs.forEach((log) => {
+      if (!groups[log.exercise_name]) {
+        groups[log.exercise_name] = [];
+      }
+      groups[log.exercise_name].push(log);
+    });
+
+    return groups;
+  }, [exerciseLogs]);
+
+  // Get list of unique exercise names
+  const exerciseNames = React.useMemo(() => {
+    return Object.keys(exerciseGroups).sort();
+  }, [exerciseGroups]);
+
+  // Set first exercise as selected if none is selected and we have data
+  useEffect(() => {
+    if (exerciseNames.length > 0 && !selectedExercise) {
+      setSelectedExercise(exerciseNames[0]);
+    }
+  }, [exerciseNames, selectedExercise]);
+
+  // Fetch data from API
+  const fetchExerciseLogs = useCallback(
+    async (isRefresh = false) => {
+      if (!user) return;
+
+      try {
+        if (!isRefresh) setIsLoading(true);
+        setError(null);
+
+        const request: GetUserExerciseLogsRequest = {
+          user_id: user.id,
+          days: 365, // Get all data and filter client-side
+        };
+
+        const response = await grpcClient.trainingService.getUserExerciseLogs(
+          request
+        );
+        setExerciseLogs(response.logs);
+      } catch (err: any) {
+        setError(err.message || 'Failed to load exercise data');
+        console.error('Error fetching exercise logs:', err);
+      } finally {
+        setIsLoading(false);
+        if (isRefresh) setIsRefreshing(false);
+      }
+    },
+    [user]
+  );
+
+  // Initial data load
+  useEffect(() => {
+    fetchExerciseLogs();
+  }, [fetchExerciseLogs]);
+
+  // Handle pull-to-refresh
+  const handleRefresh = useCallback(() => {
+    setIsRefreshing(true);
+    fetchExerciseLogs(true);
+  }, [fetchExerciseLogs]);
+
+  // Get logs for selected exercise
+  const selectedExerciseLogs = React.useMemo(() => {
+    if (!selectedExercise) return [];
+    return exerciseGroups[selectedExercise] || [];
+  }, [exerciseGroups, selectedExercise]);
+
+  // Loading state
+  if (isLoading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size='large' color='#3B82F6' />
+        <Text style={styles.loadingText}>Loading your progress data...</Text>
+      </View>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <View style={styles.errorContainer}>
+        <Text style={styles.errorTitle}>Oops!</Text>
+        <Text style={styles.errorText}>{error}</Text>
+        <TouchableOpacity
+          style={styles.button}
+          onPress={() => fetchExerciseLogs()}>
+          <Text style={styles.buttonText}>Try Again</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  // Empty state
+  if (exerciseNames.length === 0) {
+    return (
+      <ScrollView
+        contentContainerStyle={styles.emptyContainer}
+        refreshControl={
+          <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} />
+        }>
+        <Text style={styles.emptyTitle}>No Progress Data Yet</Text>
+        <Text style={styles.emptyText}>
+          Complete workouts and log your exercises to see your progress over
+          time.
+        </Text>
+        <TouchableOpacity
+          style={styles.button}
+          onPress={() => navigation.navigate('Home')}>
+          <Text style={styles.buttonText}>Go to Workouts</Text>
+        </TouchableOpacity>
+      </ScrollView>
+    );
+  }
+
+  return (
+    <SafeAreaView style={styles.container}>
+      {/* Time range selector */}
+      <View style={styles.filterContainer}>
+        <View style={styles.filterRow}>
+          <Text style={styles.filterLabel}>Time Range:</Text>
+          <View style={styles.filterOptions}>
+            {TIME_RANGES.map((range) => (
+              <TouchableOpacity
+                key={range.label}
+                style={[
+                  styles.filterOption,
+                  selectedDays === range.days && styles.filterOptionSelected,
+                ]}
+                onPress={() => setSelectedDays(range.days)}>
+                <Text
+                  style={[
+                    styles.filterOptionText,
+                    selectedDays === range.days &&
+                      styles.filterOptionTextSelected,
+                  ]}>
+                  {range.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+
+        {/* Metric selector */}
+        <View style={styles.filterRow}>
+          <Text style={styles.filterLabel}>Metric:</Text>
+          <View style={styles.filterOptions}>
+            {METRICS.map((metric) => (
+              <TouchableOpacity
+                key={metric.label}
+                style={[
+                  styles.filterOption,
+                  selectedMetric === metric.value &&
+                    styles.filterOptionSelected,
+                ]}
+                onPress={() => setSelectedMetric(metric.value)}>
+                <Text
+                  style={[
+                    styles.filterOptionText,
+                    selectedMetric === metric.value &&
+                      styles.filterOptionTextSelected,
+                  ]}>
+                  {metric.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+      </View>
+
+      {/* Exercise selector and chart */}
+      <ScrollView
+        refreshControl={
+          <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} />
+        }>
+        {/* Add AI Analysis button */}
+        <View style={styles.analysisButtonContainer}>
+          <TouchableOpacity
+            style={styles.analysisButton}
+            onPress={() =>
+              navigation.navigate('ProgressAnalysis', {
+                trainingPlanId: 'active-plan', // In a real app, use the active plan ID
+              })
+            }>
+            <Text style={styles.analysisButtonText}>
+              Get AI Progress Analysis
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Exercise selector */}
+        <View style={styles.exerciseSelector}>
+          <Text style={styles.sectionTitle}>Select Exercise:</Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.exerciseButtonsContainer}>
+            {exerciseNames.map((exerciseName) => (
+              <TouchableOpacity
+                key={exerciseName}
+                style={[
+                  styles.exerciseButton,
+                  selectedExercise === exerciseName &&
+                    styles.exerciseButtonSelected,
+                ]}
+                onPress={() => setSelectedExercise(exerciseName)}>
+                <Text
+                  style={[
+                    styles.exerciseButtonText,
+                    selectedExercise === exerciseName &&
+                      styles.exerciseButtonTextSelected,
+                  ]}>
+                  {exerciseName}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+
+        {/* Show chart for selected exercise */}
+        {selectedExercise && (
+          <View style={styles.chartContainer}>
+            <ExerciseChart
+              exerciseLogs={selectedExerciseLogs}
+              metric={selectedMetric}
+              title={selectedExercise}
+              days={selectedDays}
+            />
+
+            {/* Summary stats */}
+            <View style={styles.statsContainer}>
+              <StatsCard
+                exerciseLogs={selectedExerciseLogs}
+                metric={selectedMetric}
+                days={selectedDays}
+              />
+            </View>
+          </View>
+        )}
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+// Simple stats component
+interface StatsCardProps {
+  exerciseLogs: ExerciseLog[];
+  metric: 'weight' | 'rir';
+  days: number;
+}
+
+function StatsCard({ exerciseLogs, metric, days }: StatsCardProps) {
+  // Filter logs by days
+  const filteredLogs = React.useMemo(() => {
+    if (!exerciseLogs.length) return [];
+
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+
+    const cutoffDate = new Date();
+    cutoffDate.setDate(now.getDate() - days);
+    cutoffDate.setHours(0, 0, 0, 0);
+
+    return exerciseLogs.filter(
+      (log) => new Date(log.created_at).getTime() >= cutoffDate.getTime()
+    );
+  }, [exerciseLogs, days]);
+
+  if (filteredLogs.length === 0) {
+    return (
+      <View style={styles.statsCard}>
+        <Text style={styles.statsTitle}>Statistics</Text>
+        <Text style={styles.noStatsText}>
+          No data available for selected period
+        </Text>
+      </View>
+    );
+  }
+
+  // Get metric values
+  const values = filteredLogs.map((log) =>
+    metric === 'weight' ? log.weight : log.rir
+  );
+
+  // Calculate stats
+  const currentValue = values[values.length - 1];
+  const startingValue = values[0];
+  const maxValue = Math.max(...values);
+  const avgValue = values.reduce((a, b) => a + b, 0) / values.length;
+
+  // Calculate change
+  const change = currentValue - startingValue;
+  const changePercent =
+    startingValue !== 0 ? (change / startingValue) * 100 : 0;
+
+  // For RIR, lower is better. For weight, higher is better.
+  const isPositiveChange = metric === 'weight' ? change > 0 : change < 0;
+
+  return (
+    <View style={styles.statsCard}>
+      <Text style={styles.statsTitle}>Statistics</Text>
+      <View style={styles.statsGrid}>
+        <View style={styles.statItem}>
+          <Text style={styles.statLabel}>Current</Text>
+          <Text style={styles.statValue}>
+            {currentValue.toFixed(metric === 'weight' ? 1 : 0)}
+            {metric === 'weight' ? ' kg' : ''}
+          </Text>
+        </View>
+
+        <View style={styles.statItem}>
+          <Text style={styles.statLabel}>Starting</Text>
+          <Text style={styles.statValue}>
+            {startingValue.toFixed(metric === 'weight' ? 1 : 0)}
+            {metric === 'weight' ? ' kg' : ''}
+          </Text>
+        </View>
+
+        <View style={styles.statItem}>
+          <Text style={styles.statLabel}>Change</Text>
+          <Text
+            style={[
+              styles.statValue,
+              isPositiveChange ? styles.positiveChange : styles.negativeChange,
+            ]}>
+            {change > 0 ? '+' : ''}
+            {change.toFixed(metric === 'weight' ? 1 : 0)}
+            {metric === 'weight' ? ' kg' : ''}
+          </Text>
+        </View>
+
+        <View style={styles.statItem}>
+          <Text style={styles.statLabel}>Max</Text>
+          <Text style={styles.statValue}>
+            {maxValue.toFixed(metric === 'weight' ? 1 : 0)}
+            {metric === 'weight' ? ' kg' : ''}
+          </Text>
+        </View>
+
+        <View style={styles.statItem}>
+          <Text style={styles.statLabel}>Average</Text>
+          <Text style={styles.statValue}>
+            {avgValue.toFixed(metric === 'weight' ? 1 : 0)}
+            {metric === 'weight' ? ' kg' : ''}
+          </Text>
+        </View>
+
+        <View style={styles.statItem}>
+          <Text style={styles.statLabel}>Sessions</Text>
+          <Text style={styles.statValue}>{filteredLogs.length}</Text>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#f5f5f5',
+  },
+  loadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#f5f5f5',
+  },
+  loadingText: {
+    marginTop: 10,
+    fontSize: 16,
+    color: '#666',
+  },
+  errorContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20,
+    backgroundColor: '#f5f5f5',
+  },
+  errorTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 10,
+  },
+  errorText: {
+    fontSize: 16,
+    textAlign: 'center',
+    marginBottom: 20,
+    color: '#666',
+  },
+  emptyContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20,
+  },
+  emptyTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 10,
+  },
+  emptyText: {
+    fontSize: 16,
+    textAlign: 'center',
+    marginBottom: 20,
+    color: '#666',
+  },
+  button: {
+    backgroundColor: '#3B82F6',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+  },
+  buttonText: {
+    color: 'white',
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
+  filterContainer: {
+    backgroundColor: 'white',
+    padding: 15,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  filterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  filterLabel: {
+    width: 100,
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  filterOptions: {
+    flex: 1,
+    flexDirection: 'row',
+  },
+  filterOption: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+    marginRight: 8,
+    backgroundColor: '#f0f0f0',
+  },
+  filterOptionSelected: {
+    backgroundColor: '#3B82F6',
+  },
+  filterOptionText: {
+    fontSize: 14,
+  },
+  filterOptionTextSelected: {
+    color: 'white',
+    fontWeight: 'bold',
+  },
+  exerciseSelector: {
+    padding: 15,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 10,
+  },
+  exerciseButtonsContainer: {
+    paddingRight: 15,
+  },
+  exerciseButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    marginRight: 8,
+    backgroundColor: '#f0f0f0',
+  },
+  exerciseButtonSelected: {
+    backgroundColor: '#3B82F6',
+  },
+  exerciseButtonText: {
+    fontSize: 14,
+  },
+  exerciseButtonTextSelected: {
+    color: 'white',
+    fontWeight: 'bold',
+  },
+  chartContainer: {
+    paddingHorizontal: 15,
+    marginBottom: 20,
+  },
+  statsContainer: {
+    marginTop: 10,
+  },
+  statsCard: {
+    backgroundColor: 'white',
+    borderRadius: 10,
+    padding: 15,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  statsTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 10,
+  },
+  statsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  statItem: {
+    width: '33%',
+    marginBottom: 12,
+  },
+  statLabel: {
+    fontSize: 12,
+    color: '#666',
+  },
+  statValue: {
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  positiveChange: {
+    color: '#22c55e',
+  },
+  negativeChange: {
+    color: '#ef4444',
+  },
+  noStatsText: {
+    color: '#666',
+    fontSize: 14,
+    fontStyle: 'italic',
+  },
+  analysisButtonContainer: {
+    padding: 15,
+    marginBottom: 5,
+  },
+  analysisButton: {
+    backgroundColor: '#4F46E5',
+    padding: 14,
+    borderRadius: 8,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  analysisButtonText: {
+    color: 'white',
+    fontWeight: 'bold',
+    fontSize: 15,
+  },
+});
 </file>
 
 <file path="mobile/src/screens/RegisterScreen.tsx">
@@ -9133,61 +9738,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
 }
 </file>
 
-<file path="mobile/package.json">
-{
-  "name": "fitness-ai-app-mobile",
-  "version": "0.1.0",
-  "private": true,
-  "scripts": {
-    "start": "expo start",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
-    "web": "expo start --web",
-    "eject": "expo eject",
-    "lint": "eslint .",
-    "test": "jest"
-  },
-  "dependencies": {
-    "@improbable-eng/grpc-web": "^0.15.0",
-    "@react-native-async-storage/async-storage": "^2.1.2",
-    "@react-navigation/native": "^7.1.6",
-    "@react-navigation/native-stack": "^7.3.10",
-    "expo": "^52.0.44",
-    "expo-status-bar": "~2.1.0",
-    "google-protobuf": "^3.21.2",
-    "grpc-web": "^1.4.2",
-    "nativewind": "^4.1.23",
-    "react": "^18.2.0",
-    "react-native": "^0.73.6",
-    "react-native-chart-kit": "^6.12.0",
-    "react-native-config": "^1.5.1",
-    "react-native-safe-area-context": "5.3.0",
-    "react-native-screens": "~4.10.0",
-    "react-native-svg": "^15.11.2",
-    "zustand": "^5.0.3"
-  },
-  "devDependencies": {
-    "@babel/core": "^7.26.10",
-    "@tsconfig/react-native": "^3.0.5",
-    "@types/google-protobuf": "^3.15.12",
-    "@types/jest": "^29.5.14",
-    "@types/react": "~18.2.0",
-    "@types/react-native": "^0.73.0",
-    "@types/react-test-renderer": "^19.1.0",
-    "babel-plugin-module-resolver": "^5.0.2",
-    "babel-preset-expo": "^13.1.0",
-    "eslint": "^9.24.0",
-    "expo-module-scripts": "^4.0.5",
-    "jest": "^29.7.0",
-    "protobufjs": "^7.2.6",
-    "react-native-typescript-transformer": "^1.2.13",
-    "tailwindcss": "^3.3.2",
-    "typescript": "^5.8.3"
-  },
-  "packageManager": "yarn@1.22.22+sha512.a6b2f7906b721bba3d67d4aff083df04dad64c399707841b7acf00f6b133b7ac24255f2652fa22ae3534329dc6180534e98d17432037ff6fd140556e2bb3137e"
-}
-</file>
-
 <file path="mobile/README.md">
 # Fitness AI Mobile App
 
@@ -11329,72 +11879,58 @@ declare module 'fastify' {
 export default fastifyPlugin(dbPlugin, { name: 'db' });
 </file>
 
-<file path="mobile/src/screens/HomeScreen.tsx">
-import React from 'react';
-import { View, Text, TouchableOpacity } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-
-import { RootStackParamList } from '../navigation';
-import { useAuth } from '../context/AuthContext';
-
-type HomeScreenNavigationProp = NativeStackNavigationProp<
-  RootStackParamList,
-  'Home'
->;
-
-export default function HomeScreen() {
-  const navigation = useNavigation<HomeScreenNavigationProp>();
-  const { user } = useAuth();
-
-  return (
-    <View className='flex-1 items-center justify-center bg-background p-4'>
-      <View className='mb-8'>
-        <Text className='text-3xl font-bold text-center text-primary mb-2'>
-          Welcome to Fitness AI
-        </Text>
-        <Text className='text-lg text-center text-text-muted'>
-          Your intelligent workout companion
-        </Text>
-      </View>
-
-      <View className='w-full max-w-sm bg-white rounded-xl p-5 shadow-md mb-4'>
-        <Text className='text-xl font-bold mb-3 text-text'>Quick Actions</Text>
-
-        <TouchableOpacity
-          className='bg-primary p-4 rounded-lg mb-3'
-          onPress={() => navigation.navigate('GeneratePlan')}>
-          <Text className='text-white font-semibold text-center'>
-            Create Training Plan
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          className='bg-secondary p-4 rounded-lg mb-3'
-          onPress={() => navigation.navigate('SessionFeedback', {})}>
-          <Text className='text-white font-semibold text-center'>
-            Today's Workout
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          className='bg-indigo-500 p-4 rounded-lg mb-3'
-          onPress={() => navigation.navigate('Progress')}>
-          <Text className='text-white font-semibold text-center'>
-            Track Your Progress
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          className='bg-gray-200 p-4 rounded-lg'
-          onPress={() => navigation.navigate('Profile')}>
-          <Text className='text-text font-semibold text-center'>
-            View Profile
-          </Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
+<file path="mobile/package.json">
+{
+  "name": "fitness-ai-app-mobile",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web",
+    "eject": "expo eject",
+    "lint": "eslint .",
+    "test": "jest"
+  },
+  "dependencies": {
+    "@improbable-eng/grpc-web": "^0.15.0",
+    "@react-native-async-storage/async-storage": "^2.1.2",
+    "@react-navigation/native": "^7.1.6",
+    "@react-navigation/native-stack": "^7.3.10",
+    "expo": "^52.0.44",
+    "expo-status-bar": "~2.1.0",
+    "google-protobuf": "^3.21.2",
+    "grpc-web": "^1.4.2",
+    "nativewind": "^4.1.23",
+    "react": "^18.2.0",
+    "react-native": "^0.73.6",
+    "react-native-chart-kit": "^6.12.0",
+    "react-native-config": "^1.5.1",
+    "react-native-safe-area-context": "5.3.0",
+    "react-native-screens": "~4.10.0",
+    "react-native-svg": "^15.11.2",
+    "zustand": "^5.0.3"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.26.10",
+    "@tsconfig/react-native": "^3.0.5",
+    "@types/google-protobuf": "^3.15.12",
+    "@types/jest": "^29.5.14",
+    "@types/react": "~18.2.0",
+    "@types/react-native": "^0.73.0",
+    "@types/react-test-renderer": "^19.1.0",
+    "babel-plugin-module-resolver": "^5.0.2",
+    "babel-preset-expo": "^13.1.0",
+    "eslint": "^9.24.0",
+    "expo-module-scripts": "^4.0.5",
+    "jest": "^29.7.0",
+    "protobufjs": "^7.2.6",
+    "react-native-typescript-transformer": "^1.2.13",
+    "tailwindcss": "^3.3.2",
+    "typescript": "^5.8.3"
+  },
+  "packageManager": "yarn@1.22.22+sha512.a6b2f7906b721bba3d67d4aff083df04dad64c399707841b7acf00f6b133b7ac24255f2652fa22ae3534329dc6180534e98d17432037ff6fd140556e2bb3137e"
 }
 </file>
 
@@ -24095,6 +24631,134 @@ process.on('unhandledRejection', (err) => {
 start();
 </file>
 
+<file path="mobile/src/screens/HomeScreen.tsx">
+import React from 'react';
+import { View, Text, TouchableOpacity } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+
+import { RootStackParamList } from '../navigation';
+import { useAuth } from '../context/AuthContext';
+
+type HomeScreenNavigationProp = NativeStackNavigationProp<
+  RootStackParamList,
+  'Home'
+>;
+
+export default function HomeScreen() {
+  const navigation = useNavigation<HomeScreenNavigationProp>();
+  const { user } = useAuth();
+
+  return (
+    <View className='flex-1 items-center justify-center bg-background p-4'>
+      <View className='mb-8'>
+        <Text className='text-3xl font-bold text-center text-primary mb-2'>
+          Welcome to Fitness AI
+        </Text>
+        <Text className='text-lg text-center text-text-muted'>
+          Your intelligent workout companion
+        </Text>
+      </View>
+
+      <View className='w-full max-w-sm bg-white rounded-xl p-5 shadow-md mb-4'>
+        <Text className='text-xl font-bold mb-3 text-text'>Quick Actions</Text>
+
+        <TouchableOpacity
+          className='bg-primary p-4 rounded-lg mb-3'
+          onPress={() => navigation.navigate('GeneratePlan')}>
+          <Text className='text-white font-semibold text-center'>
+            Create Training Plan
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          className='bg-secondary p-4 rounded-lg mb-3'
+          onPress={() => navigation.navigate('SessionFeedback', {})}>
+          <Text className='text-white font-semibold text-center'>
+            Today's Workout
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          className='bg-indigo-500 p-4 rounded-lg mb-3'
+          onPress={() => navigation.navigate('Progress')}>
+          <Text className='text-white font-semibold text-center'>
+            Track Your Progress
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          className='bg-gray-200 p-4 rounded-lg'
+          onPress={() => navigation.navigate('Profile')}>
+          <Text className='text-text font-semibold text-center'>
+            View Profile
+          </Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+</file>
+
+<file path="server/package.json">
+{
+  "name": "fitness-ai-api",
+  "version": "1.0.0",
+  "description": "Backend for fitness AI training app with gRPC and OpenAI integration",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "nodemon --exec ts-node -r tsconfig-paths/register src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:studio": "prisma studio",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "fastify",
+    "grpc",
+    "openai",
+    "fitness",
+    "api"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@fastify/cors": "^8.5.0",
+    "@fastify/static": "^6.12.0",
+    "@fastify/swagger": "^8.15.0",
+    "@grpc/grpc-js": "^1.9.13",
+    "@grpc/proto-loader": "^0.7.10",
+    "@prisma/client": "^5.22.0",
+    "@types/uuid": "^10.0.0",
+    "bcrypt": "^5.1.1",
+    "config": "^3.3.10",
+    "dotenv": "^16.4.4",
+    "fastify": "^4.25.2",
+    "fastify-plugin": "^4.5.1",
+    "jsonwebtoken": "^9.0.2",
+    "openai": "^4.28.0",
+    "pg": "^8.11.3",
+    "pino": "^8.17.2",
+    "pino-pretty": "^10.3.1",
+    "redis": "^4.6.13",
+    "uuid": "^11.1.0"
+  },
+  "devDependencies": {
+    "@types/bcrypt": "^5.0.2",
+    "@types/jsonwebtoken": "^9.0.5",
+    "@types/node": "^20.11.20",
+    "@types/pg": "^8.10.9",
+    "nodemon": "^3.0.3",
+    "prisma": "^6.6.0",
+    "ts-node": "^10.9.2",
+    "tsconfig-paths": "^4.2.0",
+    "typescript": "^5.3.3"
+  }
+}
+</file>
+
 <file path="mobile/src/navigation/index.tsx">
 import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -24107,6 +24771,7 @@ import GeneratePlanScreen from '../screens/GeneratePlanScreen';
 import PlanSummaryScreen from '../screens/PlanSummaryScreen';
 import SessionFeedbackScreen from '../screens/SessionFeedbackScreen';
 import ProgressScreen from '../screens/ProgressScreen';
+import ProgressAnalysisScreen from '../screens/ProgressAnalysisScreen';
 import { useAuth } from '../context/AuthContext';
 import { TrainingPlanResponse } from '../services/grpcClient';
 
@@ -24121,21 +24786,22 @@ export type RootStackParamList = {
   PlanSummary: { plan: TrainingPlanResponse };
   SessionFeedback: { sessionId?: string };
   Progress: undefined;
+  ProgressAnalysis: { trainingPlanId: string };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
-function Navigation() {
-  const { isAuthenticated, isLoading } = useAuth();
+export default function Navigation() {
+  const { user, isLoading } = useAuth();
 
-  // If still checking auth status, could show a splash screen or loading indicator
+  // Skip rendering until auth state is determined
   if (isLoading) {
-    return null; // Or a loading spinner component
+    return null;
   }
 
   return (
     <Stack.Navigator
-      initialRouteName={isAuthenticated ? 'Home' : 'Login'}
+      initialRouteName={user ? 'Home' : 'Login'}
       screenOptions={{
         headerShown: true,
         headerStyle: {
@@ -24146,8 +24812,8 @@ function Navigation() {
           fontWeight: 'bold',
         },
       }}>
-      {isAuthenticated ? (
-        // Authenticated user screens
+      {user ? (
+        // Authenticated routes
         <>
           <Stack.Screen
             name='Home'
@@ -24172,40 +24838,37 @@ function Navigation() {
           <Stack.Screen
             name='SessionFeedback'
             component={SessionFeedbackScreen}
-            options={{ title: "Today's Workout" }}
+            options={{ title: 'Workout Feedback' }}
           />
           <Stack.Screen
             name='Progress'
             component={ProgressScreen}
             options={{ title: 'Your Progress' }}
           />
+          <Stack.Screen
+            name='ProgressAnalysis'
+            component={ProgressAnalysisScreen}
+            options={{ title: 'Progress Analysis' }}
+          />
         </>
       ) : (
-        // Authentication screens
+        // Unauthenticated routes
         <>
           <Stack.Screen
             name='Login'
             component={LoginScreen}
-            options={{
-              title: 'Sign In',
-              headerShown: false,
-            }}
+            options={{ headerShown: false }}
           />
           <Stack.Screen
             name='Register'
             component={RegisterScreen}
-            options={{
-              title: 'Create Account',
-              headerShown: false,
-            }}
+            options={{ headerShown: false }}
           />
         </>
       )}
     </Stack.Navigator>
   );
 }
-
-export default Navigation;
 </file>
 
 <file path="mobile/src/services/grpcClient.ts">
@@ -24334,6 +24997,28 @@ export interface GetUserExerciseLogsResponse {
   logs: ExerciseLog[];
 }
 
+export interface ProgressionSuggestionsRequest {
+  user_id: string;
+  training_plan_id: string;
+  history_weeks: number;
+}
+
+export interface ExerciseModificationSuggestion {
+  exercise_id: string;
+  suggestion: string;
+  new_weight?: number;
+  replace_with?: string;
+}
+
+export interface ProgressionSuggestionsResponse {
+  training_plan_id: string;
+  deload_recommended: boolean;
+  summary: string;
+  modified_exercises: ExerciseModificationSuggestion[];
+  generated_at: string;
+  model_used: string;
+}
+
 // User service interfaces
 interface UserService {
   authenticateUser: (request: LoginRequest) => Promise<AuthResponse>;
@@ -24355,6 +25040,9 @@ interface TrainingService {
   getUserExerciseLogs: (
     request: GetUserExerciseLogsRequest
   ) => Promise<GetUserExerciseLogsResponse>;
+  generateProgressionSuggestions: (
+    request: ProgressionSuggestionsRequest
+  ) => Promise<ProgressionSuggestionsResponse>;
 }
 
 // Simplified GrpcClient class
@@ -24380,6 +25068,7 @@ class GrpcClient {
       submitSessionFeedback: this.submitSessionFeedback.bind(this),
       getTodaySession: this.getTodaySession.bind(this),
       getUserExerciseLogs: this.getUserExerciseLogs.bind(this),
+      generateProgressionSuggestions: this.generateProgressionSuggestions.bind(this),
     };
   }
 
@@ -24815,70 +25504,61 @@ class GrpcClient {
         new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
     );
   }
+
+  private async generateProgressionSuggestions(
+    request: ProgressionSuggestionsRequest
+  ): Promise<ProgressionSuggestionsResponse> {
+    try {
+      // This would be a real gRPC call in production
+      console.log(
+        'Generating progression suggestions for user:',
+        request.user_id,
+        'training plan:',
+        request.training_plan_id
+      );
+
+      // Check if we have an auth token
+      if (!this.authToken) {
+        throw new Error('Authentication required');
+      }
+
+      // Simulating network delay
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+
+      // Mock response for development
+      return {
+        training_plan_id: request.training_plan_id,
+        deload_recommended: Math.random() > 0.7, // 30% chance of recommending deload
+        summary: `Based on your last ${request.history_weeks} weeks of training, you've been making steady progress. You might benefit from progressively increasing weight on compound lifts and adding volume to isolation exercises.`,
+        modified_exercises: [
+          {
+            exercise_id: 'Barbell Squat',
+            suggestion: 'Increase weight by 5kg for your working sets. Your form has been consistent.',
+            new_weight: 85,
+          },
+          {
+            exercise_id: 'Bench Press',
+            suggestion: 'You seem to be plateauing. Try increasing reps before adding weight.',
+          },
+          {
+            exercise_id: 'Lateral Raises',
+            suggestion: 'Consider replacing with Cable Lateral Raises for better tension throughout the range of motion.',
+            replace_with: 'Cable Lateral Raises',
+          },
+        ],
+        generated_at: new Date().toISOString(),
+        model_used: 'gpt-4',
+      };
+    } catch (error) {
+      console.error('Progression suggestions error:', error);
+      throw new Error('Failed to generate progression suggestions');
+    }
+  }
 }
 
 // Create and export a singleton instance
 const grpcClient = new GrpcClient(GRPC_ENDPOINT);
 export default grpcClient;
-</file>
-
-<file path="server/package.json">
-{
-  "name": "fitness-ai-api",
-  "version": "1.0.0",
-  "description": "Backend for fitness AI training app with gRPC and OpenAI integration",
-  "main": "dist/index.js",
-  "scripts": {
-    "dev": "nodemon --exec ts-node -r tsconfig-paths/register src/index.ts",
-    "build": "tsc",
-    "start": "node dist/index.js",
-    "prisma:generate": "prisma generate",
-    "prisma:migrate": "prisma migrate dev",
-    "prisma:studio": "prisma studio",
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "keywords": [
-    "fastify",
-    "grpc",
-    "openai",
-    "fitness",
-    "api"
-  ],
-  "author": "",
-  "license": "ISC",
-  "dependencies": {
-    "@fastify/cors": "^8.5.0",
-    "@fastify/static": "^6.12.0",
-    "@fastify/swagger": "^8.15.0",
-    "@grpc/grpc-js": "^1.9.13",
-    "@grpc/proto-loader": "^0.7.10",
-    "@prisma/client": "^5.22.0",
-    "@types/uuid": "^10.0.0",
-    "bcrypt": "^5.1.1",
-    "config": "^3.3.10",
-    "dotenv": "^16.4.4",
-    "fastify": "^4.25.2",
-    "fastify-plugin": "^4.5.1",
-    "jsonwebtoken": "^9.0.2",
-    "openai": "^4.28.0",
-    "pg": "^8.11.3",
-    "pino": "^8.17.2",
-    "pino-pretty": "^10.3.1",
-    "redis": "^4.6.13",
-    "uuid": "^11.1.0"
-  },
-  "devDependencies": {
-    "@types/bcrypt": "^5.0.2",
-    "@types/jsonwebtoken": "^9.0.5",
-    "@types/node": "^20.11.20",
-    "@types/pg": "^8.10.9",
-    "nodemon": "^3.0.3",
-    "prisma": "^6.6.0",
-    "ts-node": "^10.9.2",
-    "tsconfig-paths": "^4.2.0",
-    "typescript": "^5.3.3"
-  }
-}
 </file>
 
 </files>
