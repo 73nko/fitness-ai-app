@@ -14,6 +14,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 import { RootStackParamList } from '../navigation';
 import { useAuth } from '../context/AuthContext';
+import { useTraining } from '../context/TrainingContext';
 import grpcClient, { TrainingPlanRequest } from '../services/grpcClient';
 
 type GeneratePlanScreenNavigationProp = NativeStackNavigationProp<
@@ -21,22 +22,13 @@ type GeneratePlanScreenNavigationProp = NativeStackNavigationProp<
   'GeneratePlan'
 >;
 
-// Focus areas available for selection
-const FOCUS_AREAS = [
-  'Full Body',
-  'Upper Body',
-  'Lower Body',
-  'Core',
-  'Glutes',
-  'Arms',
-  'Back',
-  'Chest',
-  'Cardio',
-];
+// Focus areas matching the expected interface
+const FOCUS_AREAS = ['general', 'strength', 'hypertrophy', 'performance'];
 
 export default function GeneratePlanScreen() {
   const navigation = useNavigation<GeneratePlanScreenNavigationProp>();
   const { user } = useAuth();
+  const { setTrainingPlan } = useTraining();
 
   // Form state
   const [name, setName] = useState('');
@@ -47,7 +39,7 @@ export default function GeneratePlanScreen() {
   const [includeWarmup, setIncludeWarmup] = useState(true);
   const [includeCooldown, setIncludeCooldown] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
-  const [selectedFocusArea, setSelectedFocusArea] = useState('');
+  const [selectedFocusArea, setSelectedFocusArea] = useState(FOCUS_AREAS[0]);
 
   // Validation
   const isFormValid = () => {
@@ -97,13 +89,17 @@ export default function GeneratePlanScreen() {
         includeCooldown,
       };
 
-      const response =
+      const trainingPlan =
         await grpcClient.trainingService.generateTrainingPlan(request);
 
+      // Save plan to context if available
+      setTrainingPlan(trainingPlan);
+
       // Navigate to the summary screen with the generated plan
-      navigation.navigate('PlanSummary', { plan: response });
+      navigation.navigate('PlanSummary', { plan: trainingPlan });
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Failed to generate training plan');
+      console.error('Failed to generate plan:', error);
     } finally {
       setIsLoading(false);
     }

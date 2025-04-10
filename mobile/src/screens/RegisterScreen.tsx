@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -40,7 +40,7 @@ interface FormErrors {
 
 export default function RegisterScreen() {
   const navigation = useNavigation<RegisterScreenNavigationProp>();
-  const { register, isLoading, error, clearError } = useAuth();
+  const { register, isLoading, error, clearError, isAuthenticated } = useAuth();
 
   const [formData, setFormData] = useState<RegisterFormData>({
     email: '',
@@ -53,18 +53,25 @@ export default function RegisterScreen() {
   const [formErrors, setFormErrors] = useState<FormErrors>({});
 
   // Clear auth context errors when component unmounts
-  React.useEffect(() => {
+  useEffect(() => {
     return () => {
       clearError();
     };
   }, [clearError]);
 
   // Display auth error as an alert
-  React.useEffect(() => {
+  useEffect(() => {
     if (error) {
       Alert.alert('Registration Error', error);
     }
   }, [error]);
+
+  // Redirect to Home screen after successful authentication
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigation.navigate('Home');
+    }
+  }, [isAuthenticated, navigation]);
 
   function validateForm(): boolean {
     const errors: FormErrors = {};
