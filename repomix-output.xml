@@ -44,7 +44,43 @@ The content is organized as follows:
 
 <directory_structure>
 mobile/
+  src/
+    components/
+      Button.tsx
+      ExerciseCard.tsx
+    config/
+      env.ts
+    context/
+      AuthContext.tsx
+    navigation/
+      index.tsx
+    screens/
+      GeneratePlanScreen.tsx
+      HomeScreen.tsx
+      LoginScreen.tsx
+      PlanSummaryScreen.tsx
+      ProfileScreen.tsx
+      RegisterScreen.tsx
+    services/
+      grpcClient.ts
+    utils/
+      nativewind-setup.ts
+      validation.ts
+    App.tsx
+    types.d.ts
+  .env.example
+  app.d.ts
+  App.tsx
+  babel.config.js
+  global.css
+  metro.config.js
+  nativewind-env.d.ts
+  package.json
+  postcss.config.js
+  react-native.config.js
   README.md
+  tailwind.config.js
+  tsconfig.json
 proto/
   services.proto
 server/
@@ -135,245 +171,1471 @@ web.Dockerfile
 <files>
 This section contains the contents of the repository's files.
 
-<file path="mobile/README.md">
-# Fitness AI Mobile App
+<file path="mobile/src/components/Button.tsx">
+import * as React from 'react';
+import {
+  TouchableOpacity,
+  Text,
+  ActivityIndicator,
+  StyleSheet,
+  TouchableOpacityProps,
+} from 'react-native';
 
-Este es el cliente móvil para la aplicación de entrenamiento personalizado con IA.
+interface ButtonProps {
+  /**
+   * Button text content
+   */
+  title: string;
+  /**
+   * Function called when button is pressed
+   */
+  onPress: TouchableOpacityProps['onPress'];
+  /**
+   * Button visual style variant
+   * @default 'primary'
+   */
+  variant?: 'primary' | 'secondary' | 'outline';
+  /**
+   * Shows loading indicator instead of title
+   * @default false
+   */
+  isLoading?: boolean;
+  /**
+   * Disables button interactions
+   * @default false
+   */
+  disabled?: boolean;
+}
 
-## Requisitos
+/**
+ * Button component with different variants
+ */
+export function Button(props: ButtonProps) {
+  const {
+    title,
+    onPress,
+    variant = 'primary',
+    isLoading = false,
+    disabled = false,
+  } = props;
 
-- Node.js >= 14
-- React Native CLI
-- Cocoapods (para iOS)
-- Android Studio (para Android)
-- Xcode (para iOS)
+  // Get container style based on variant and disabled state
+  const getContainerStyle = () => {
+    if (disabled) {
+      return styles.buttonDisabled;
+    }
 
-## Instalación
+    switch (variant) {
+      case 'primary':
+        return styles.buttonPrimary;
+      case 'secondary':
+        return styles.buttonSecondary;
+      case 'outline':
+        return styles.buttonOutline;
+      default:
+        return styles.buttonPrimary;
+    }
+  };
 
-```bash
-# Instalar dependencias
-npm install
+  // Get text style based on variant and disabled state
+  const getTextStyle = () => {
+    if (disabled) {
+      return styles.textDisabled;
+    }
 
-# Para iOS
-cd ios && pod install && cd ..
+    switch (variant) {
+      case 'outline':
+        return styles.textOutline;
+      default:
+        return styles.textLight;
+    }
+  };
 
-# Para Android
-# No se requieren pasos adicionales
-```
+  return (
+    <TouchableOpacity
+      style={[styles.button, getContainerStyle()]}
+      onPress={onPress}
+      disabled={disabled || isLoading}>
+      {isLoading ? (
+        <ActivityIndicator
+          size='small'
+          color={variant === 'outline' ? '#3B82F6' : '#ffffff'}
+        />
+      ) : (
+        <Text style={[styles.text, getTextStyle()]}>{title}</Text>
+      )}
+    </TouchableOpacity>
+  );
+}
 
-## Ejecución
+const styles = StyleSheet.create({
+  button: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  buttonPrimary: {
+    backgroundColor: '#3B82F6',
+  },
+  buttonSecondary: {
+    backgroundColor: '#10B981',
+  },
+  buttonOutline: {
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: '#3B82F6',
+  },
+  buttonDisabled: {
+    backgroundColor: '#E5E7EB',
+  },
+  text: {
+    fontSize: 16,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  textLight: {
+    color: '#FFFFFF',
+  },
+  textOutline: {
+    color: '#3B82F6',
+  },
+  textDisabled: {
+    color: '#9CA3AF',
+  },
+});
+</file>
 
-```bash
-# iOS
-npm run ios
+<file path="mobile/src/components/ExerciseCard.tsx">
+import React from 'react';
+import { View, Text } from 'react-native';
+import { ExerciseData } from '../services/grpcClient';
 
-# Android
-npm run android
-```
+interface ExerciseCardProps {
+  exercise: ExerciseData;
+}
 
-## Estructura del Proyecto
+export default function ExerciseCard({ exercise }: ExerciseCardProps) {
+  return (
+    <View className='bg-white rounded-lg p-4 shadow-sm'>
+      <Text className='text-lg font-bold text-primary mb-1'>
+        {exercise.name}
+      </Text>
+      <Text className='text-text mb-3'>{exercise.description}</Text>
 
-```
-mobile/
-├── android/          # Configuración específica de Android
-├── ios/              # Configuración específica de iOS
-├── src/              # Código fuente
-│   ├── api/          # Clientes gRPC y API
-│   ├── components/   # Componentes reutilizables
-│   ├── screens/      # Pantallas de la aplicación
-│   ├── navigation/   # Configuración de navegación
-│   ├── store/        # Estado global (Redux o similar)
-│   ├── theme/        # Estilos y tema
-│   └── utils/        # Utilidades y helpers
-└── App.tsx           # Punto de entrada
-```
+      <View className='flex-row flex-wrap justify-between mb-1'>
+        <View className='bg-gray-100 px-3 py-1 rounded-full mb-2'>
+          <Text className='text-text font-medium'>Sets: {exercise.sets}</Text>
+        </View>
 
-## Configuración de gRPC
+        <View className='bg-gray-100 px-3 py-1 rounded-full mb-2'>
+          <Text className='text-text font-medium'>Reps: {exercise.reps}</Text>
+        </View>
 
-Para trabajar con gRPC en React Native, utilizaremos la librería `@grpc/grpc-js` en combinación con un proxy web para la comunicación desde el dispositivo móvil.
+        <View className='bg-gray-100 px-3 py-1 rounded-full mb-2'>
+          <Text className='text-text font-medium'>
+            Rest: {exercise.restTime}s
+          </Text>
+        </View>
+      </View>
 
-### Ejemplos de llamadas gRPC
+      {exercise.notes ? (
+        <View className='mt-2 bg-blue-50 p-2 rounded'>
+          <Text className='text-text-muted italic'>{exercise.notes}</Text>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+</file>
 
-#### Autenticación de Usuario
+<file path="mobile/src/config/env.ts">
+import Config from 'react-native-config';
 
-```typescript
-// src/api/auth.ts
-import { credentials } from '@grpc/grpc-js';
-import { UserServiceClient } from '../generated/fitness_grpc_pb';
-import { LoginRequest } from '../generated/fitness_pb';
+interface EnvConfig {
+  GRPC_ENDPOINT: string;
+  API_KEY: string;
+  APP_ENV: string;
+  DEBUG_MODE: boolean;
+  ENABLE_ANALYTICS: boolean;
+}
 
-// Crear cliente gRPC
-const client = new UserServiceClient(
-  'your-server-address:50051',
-  credentials.createInsecure()
-);
-
-export const login = (email: string, password: string): Promise<any> => {
-  return new Promise((resolve, reject) => {
-    const request = new LoginRequest();
-    request.setEmail(email);
-    request.setPassword(password);
-
-    client.authenticateUser(request, (err, response) => {
-      if (err) {
-        reject(err);
-        return;
-      }
-
-      const token = response.getToken();
-      const user = response.getUser();
-
-      resolve({
-        token,
-        user: {
-          id: user.getId(),
-          email: user.getEmail(),
-          firstName: user.getFirstName(),
-          lastName: user.getLastName(),
-        }
-      });
-    });
-  });
+// Default values in case .env file is missing
+const defaultConfig: EnvConfig = {
+  GRPC_ENDPOINT: 'http://localhost:8080',
+  API_KEY: 'dev_key',
+  APP_ENV: 'development',
+  DEBUG_MODE: true,
+  ENABLE_ANALYTICS: false,
 };
-```
 
-#### Obtener Perfil de Usuario
+// Convert string values from env to proper types
+function parseEnv(): EnvConfig {
+  return {
+    GRPC_ENDPOINT: Config.GRPC_ENDPOINT || defaultConfig.GRPC_ENDPOINT,
+    API_KEY: Config.API_KEY || defaultConfig.API_KEY,
+    APP_ENV: Config.APP_ENV || defaultConfig.APP_ENV,
+    DEBUG_MODE: Config.DEBUG_MODE === 'true' || defaultConfig.DEBUG_MODE,
+    ENABLE_ANALYTICS:
+      Config.ENABLE_ANALYTICS === 'true' || defaultConfig.ENABLE_ANALYTICS,
+  };
+}
 
-```typescript
-// src/api/user.ts
-import { credentials } from '@grpc/grpc-js';
-import { UserServiceClient } from '../generated/fitness_grpc_pb';
-import { UserIdRequest } from '../generated/fitness_pb';
+// Export parsed environment variables
+export const env = parseEnv();
 
-// Crear cliente gRPC
-const client = new UserServiceClient(
-  'your-server-address:50051',
-  credentials.createInsecure()
-);
+// Helper function to check if we're in development mode
+export function isDev(): boolean {
+  return env.APP_ENV === 'development';
+}
 
-export const getUserProfile = (userId: string): Promise<any> => {
-  return new Promise((resolve, reject) => {
-    const request = new UserIdRequest();
-    request.setUserId(userId);
+// Helper function to check if we're in production mode
+export function isProd(): boolean {
+  return env.APP_ENV === 'production';
+}
 
-    client.getUserProfile(request, (err, response) => {
-      if (err) {
-        reject(err);
-        return;
-      }
+// Helper function to check if debugging is enabled
+export function isDebugEnabled(): boolean {
+  return env.DEBUG_MODE;
+}
 
-      resolve({
-        id: response.getId(),
-        email: response.getEmail(),
-        firstName: response.getFirstName(),
-        lastName: response.getLastName(),
-        profile: {
-          age: response.getProfile()?.getAge(),
-          weight: response.getProfile()?.getWeight(),
-          height: response.getProfile()?.getHeight(),
-          fitnessLevel: response.getProfile()?.getFitnessLevel(),
-          fitnessGoals: response.getProfile()?.getFitnessGoalsList(),
-          medicalIssues: response.getProfile()?.getMedicalIssuesList(),
-          availableEquipment: response.getProfile()?.getAvailableEquipmentList(),
-        }
-      });
-    });
+export default env;
+</file>
+
+<file path="mobile/src/screens/GeneratePlanScreen.tsx">
+import React, { useState } from 'react';
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  ScrollView,
+  ActivityIndicator,
+  Alert,
+  Switch,
+} from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+
+import { RootStackParamList } from '../navigation';
+import { useAuth } from '../context/AuthContext';
+import grpcClient, { TrainingPlanRequest } from '../services/grpcClient';
+
+type GeneratePlanScreenNavigationProp = NativeStackNavigationProp<
+  RootStackParamList,
+  'GeneratePlan'
+>;
+
+// Focus areas available for selection
+const FOCUS_AREAS = [
+  'Full Body',
+  'Upper Body',
+  'Lower Body',
+  'Core',
+  'Glutes',
+  'Arms',
+  'Back',
+  'Chest',
+  'Cardio',
+];
+
+export default function GeneratePlanScreen() {
+  const navigation = useNavigation<GeneratePlanScreenNavigationProp>();
+  const { user } = useAuth();
+
+  // Form state
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const [daysPerWeek, setDaysPerWeek] = useState('3');
+  const [focusArea, setFocusArea] = useState(FOCUS_AREAS[0]);
+  const [sessionDuration, setSessionDuration] = useState('45');
+  const [includeWarmup, setIncludeWarmup] = useState(true);
+  const [includeCooldown, setIncludeCooldown] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
+  const [selectedFocusArea, setSelectedFocusArea] = useState('');
+
+  // Validation
+  const isFormValid = () => {
+    return (
+      name.trim() !== '' &&
+      !isNaN(parseInt(daysPerWeek)) &&
+      parseInt(daysPerWeek) > 0 &&
+      parseInt(daysPerWeek) <= 7 &&
+      focusArea !== '' &&
+      !isNaN(parseInt(sessionDuration)) &&
+      parseInt(sessionDuration) > 0
+    );
+  };
+
+  // Handle focus area selection
+  const selectFocusArea = (area: string) => {
+    setFocusArea(area);
+    setSelectedFocusArea(area);
+  };
+
+  // Handle form submission
+  const handleGeneratePlan = async () => {
+    if (!user?.id) {
+      Alert.alert('Error', 'You must be logged in to generate a training plan');
+      return;
+    }
+
+    if (!isFormValid()) {
+      Alert.alert(
+        'Invalid Form',
+        'Please fill out all required fields correctly'
+      );
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      const request: TrainingPlanRequest = {
+        userId: user.id,
+        name,
+        description,
+        daysPerWeek: parseInt(daysPerWeek),
+        focusArea,
+        sessionDuration: parseInt(sessionDuration),
+        includeWarmup,
+        includeCooldown,
+      };
+
+      const response =
+        await grpcClient.trainingService.generateTrainingPlan(request);
+
+      // Navigate to the summary screen with the generated plan
+      navigation.navigate('PlanSummary', { plan: response });
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'Failed to generate training plan');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <ScrollView className='flex-1 bg-background'>
+      <View className='p-4'>
+        <Text className='text-2xl font-bold text-primary mb-4'>
+          Create Training Plan
+        </Text>
+
+        <View className='bg-white rounded-xl p-5 shadow-md mb-4'>
+          <Text className='text-lg font-medium text-text mb-1'>Plan Name*</Text>
+          <TextInput
+            className='border border-gray-300 rounded-lg p-3 mb-4 text-text'
+            placeholder='My Training Plan'
+            value={name}
+            onChangeText={setName}
+          />
+
+          <Text className='text-lg font-medium text-text mb-1'>
+            Description
+          </Text>
+          <TextInput
+            className='border border-gray-300 rounded-lg p-3 mb-4 text-text'
+            placeholder='Optional plan description'
+            value={description}
+            onChangeText={setDescription}
+            multiline
+            numberOfLines={3}
+          />
+
+          <Text className='text-lg font-medium text-text mb-1'>
+            Days Per Week*
+          </Text>
+          <TextInput
+            className='border border-gray-300 rounded-lg p-3 mb-4 text-text'
+            placeholder='3'
+            value={daysPerWeek}
+            onChangeText={setDaysPerWeek}
+            keyboardType='numeric'
+          />
+
+          <Text className='text-lg font-medium text-text mb-1'>
+            Focus Area*
+          </Text>
+          <View className='flex-row flex-wrap mb-4'>
+            {FOCUS_AREAS.map((area) => (
+              <TouchableOpacity
+                key={area}
+                className={`m-1 px-3 py-2 rounded-lg ${
+                  focusArea === area ? 'bg-primary' : 'bg-gray-200'
+                }`}
+                onPress={() => selectFocusArea(area)}>
+                <Text
+                  className={`${
+                    focusArea === area ? 'text-white' : 'text-text'
+                  }`}>
+                  {area}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          <Text className='text-lg font-medium text-text mb-1'>
+            Session Duration (minutes)*
+          </Text>
+          <TextInput
+            className='border border-gray-300 rounded-lg p-3 mb-4 text-text'
+            placeholder='45'
+            value={sessionDuration}
+            onChangeText={setSessionDuration}
+            keyboardType='numeric'
+          />
+
+          <View className='flex-row items-center justify-between mb-4'>
+            <Text className='text-lg font-medium text-text'>
+              Include Warmup
+            </Text>
+            <Switch
+              value={includeWarmup}
+              onValueChange={setIncludeWarmup}
+              trackColor={{ false: '#ddd', true: '#3B82F6' }}
+            />
+          </View>
+
+          <View className='flex-row items-center justify-between mb-4'>
+            <Text className='text-lg font-medium text-text'>
+              Include Cooldown
+            </Text>
+            <Switch
+              value={includeCooldown}
+              onValueChange={setIncludeCooldown}
+              trackColor={{ false: '#ddd', true: '#3B82F6' }}
+            />
+          </View>
+
+          <TouchableOpacity
+            className={`p-4 rounded-lg ${
+              isFormValid() && !isLoading ? 'bg-primary' : 'bg-gray-300'
+            }`}
+            onPress={handleGeneratePlan}
+            disabled={!isFormValid() || isLoading}>
+            {isLoading ? (
+              <ActivityIndicator color='#fff' />
+            ) : (
+              <Text className='text-white font-semibold text-center'>
+                Generate Training Plan
+              </Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      </View>
+    </ScrollView>
+  );
+}
+</file>
+
+<file path="mobile/src/screens/LoginScreen.tsx">
+import React, { useState } from 'react';
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+} from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+
+import { useAuth } from '../context/AuthContext';
+import { isValidEmail, isValidPassword } from '../utils/validation';
+import { RootStackParamList } from '../navigation';
+
+type LoginScreenNavigationProp = NativeStackNavigationProp<
+  RootStackParamList,
+  'Login'
+>;
+
+interface LoginFormData {
+  email: string;
+  password: string;
+}
+
+interface FormErrors {
+  email?: string;
+  password?: string;
+}
+
+export default function LoginScreen() {
+  const navigation = useNavigation<LoginScreenNavigationProp>();
+  const { login, isLoading, error, clearError } = useAuth();
+
+  const [formData, setFormData] = useState<LoginFormData>({
+    email: '',
+    password: '',
   });
-};
-```
 
-#### Generar Plan de Entrenamiento
+  const [formErrors, setFormErrors] = useState<FormErrors>({});
 
-```typescript
-// src/api/training.ts
-import { credentials } from '@grpc/grpc-js';
-import { TrainingServiceClient } from '../generated/fitness_grpc_pb';
-import { TrainingPlanRequest } from '../generated/fitness_pb';
+  // Clear auth context errors when component unmounts
+  React.useEffect(() => {
+    return () => {
+      clearError();
+    };
+  }, [clearError]);
 
-// Crear cliente gRPC
-const client = new TrainingServiceClient(
-  'your-server-address:50051',
-  credentials.createInsecure()
-);
+  // Display auth error as an alert
+  React.useEffect(() => {
+    if (error) {
+      Alert.alert('Login Error', error);
+    }
+  }, [error]);
 
-export const generateTrainingPlan = (params: {
-  userId: string;
-  name: string;
-  description?: string;
-  daysPerWeek: number;
-  focusArea: string;
-  sessionDuration: number;
-  includeWarmup: boolean;
-  includeCooldown: boolean;
-}): Promise<any> => {
-  return new Promise((resolve, reject) => {
-    const request = new TrainingPlanRequest();
-    request.setUserId(params.userId);
-    request.setName(params.name);
-    request.setDescription(params.description || '');
-    request.setDaysPerWeek(params.daysPerWeek);
-    request.setFocusArea(params.focusArea);
-    request.setSessionDuration(params.sessionDuration);
-    request.setIncludeWarmup(params.includeWarmup);
-    request.setIncludeCooldown(params.includeCooldown);
+  function validateForm(): boolean {
+    const errors: FormErrors = {};
+    let isValid = true;
 
-    client.generateTrainingPlan(request, (err, response) => {
-      if (err) {
-        reject(err);
-        return;
-      }
+    // Email validation
+    if (!formData.email) {
+      errors.email = 'Email is required';
+      isValid = false;
+    } else if (!isValidEmail(formData.email)) {
+      errors.email = 'Please enter a valid email';
+      isValid = false;
+    }
 
-      const exercises = response.getExercisesList().map(exercise => ({
-        id: exercise.getId(),
-        name: exercise.getName(),
-        description: exercise.getDescription(),
-        sets: exercise.getSets(),
-        reps: exercise.getReps(),
-        restTime: exercise.getRestTime(),
-        notes: exercise.getNotes(),
-        dayOfWeek: exercise.getDayOfWeek(),
-        order: exercise.getOrder()
-      }));
+    // Password validation
+    if (!formData.password) {
+      errors.password = 'Password is required';
+      isValid = false;
+    }
 
-      resolve({
-        id: response.getId(),
-        userId: response.getUserId(),
-        name: response.getName(),
-        description: response.getDescription(),
-        createdAt: response.getCreatedAt(),
-        updatedAt: response.getUpdatedAt(),
-        isActive: response.getIsActive(),
-        generatedBy: response.getGeneratedBy(),
-        exercises
-      });
-    });
+    setFormErrors(errors);
+    return isValid;
+  }
+
+  async function handleLogin() {
+    if (!validateForm()) return;
+
+    try {
+      await login(formData.email, formData.password);
+    } catch (err) {
+      // Error is handled by the AuthContext
+    }
+  }
+
+  function navigateToRegister() {
+    navigation.navigate('Register');
+  }
+
+  return (
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      className='flex-1 bg-background'>
+      <ScrollView contentContainerClassName='flex-grow'>
+        <View className='flex-1 p-6 justify-center'>
+          <View className='mb-8'>
+            <Text className='text-3xl font-bold text-center text-primary'>
+              Welcome Back
+            </Text>
+            <Text className='text-base text-center text-text-muted mt-2'>
+              Sign in to continue to your fitness journey
+            </Text>
+          </View>
+
+          <View className='mb-6'>
+            <Text className='text-sm font-medium text-text mb-1'>Email</Text>
+            <TextInput
+              className={`bg-white p-3 rounded-lg border ${
+                formErrors.email ? 'border-red-500' : 'border-gray-200'
+              }`}
+              placeholder='your@email.com'
+              keyboardType='email-address'
+              autoCapitalize='none'
+              value={formData.email}
+              onChangeText={(text) => {
+                setFormData({ ...formData, email: text });
+                if (formErrors.email) {
+                  setFormErrors({ ...formErrors, email: undefined });
+                }
+              }}
+            />
+            {formErrors.email && (
+              <Text className='text-red-500 text-xs mt-1'>
+                {formErrors.email}
+              </Text>
+            )}
+          </View>
+
+          <View className='mb-8'>
+            <Text className='text-sm font-medium text-text mb-1'>Password</Text>
+            <TextInput
+              className={`bg-white p-3 rounded-lg border ${
+                formErrors.password ? 'border-red-500' : 'border-gray-200'
+              }`}
+              placeholder='Password'
+              secureTextEntry
+              value={formData.password}
+              onChangeText={(text) => {
+                setFormData({ ...formData, password: text });
+                if (formErrors.password) {
+                  setFormErrors({ ...formErrors, password: undefined });
+                }
+              }}
+            />
+            {formErrors.password && (
+              <Text className='text-red-500 text-xs mt-1'>
+                {formErrors.password}
+              </Text>
+            )}
+          </View>
+
+          <TouchableOpacity
+            className={`${isLoading ? 'bg-gray-400' : 'bg-primary'} p-4 rounded-lg mb-4`}
+            onPress={handleLogin}
+            disabled={isLoading}>
+            {isLoading ? (
+              <ActivityIndicator color='white' />
+            ) : (
+              <Text className='text-white font-semibold text-center'>
+                Sign In
+              </Text>
+            )}
+          </TouchableOpacity>
+
+          <View className='flex-row justify-center'>
+            <Text className='text-text-muted'>Don't have an account? </Text>
+            <TouchableOpacity onPress={navigateToRegister}>
+              <Text className='text-primary font-medium'>Sign up</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
+  );
+}
+</file>
+
+<file path="mobile/src/screens/PlanSummaryScreen.tsx">
+import React from 'react';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  ScrollView,
+  FlatList,
+} from 'react-native';
+import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+
+import { RootStackParamList } from '../navigation';
+import { ExerciseData } from '../services/grpcClient';
+import ExerciseCard from '../components/ExerciseCard';
+
+type PlanSummaryScreenNavigationProp = NativeStackNavigationProp<
+  RootStackParamList,
+  'PlanSummary'
+>;
+
+type PlanSummaryScreenRouteProp = RouteProp<RootStackParamList, 'PlanSummary'>;
+
+// Group exercises by day of week
+function groupExercisesByDay(
+  exercises: ExerciseData[]
+): Map<number, ExerciseData[]> {
+  const grouped = new Map<number, ExerciseData[]>();
+
+  exercises.forEach((exercise) => {
+    if (!grouped.has(exercise.dayOfWeek)) {
+      grouped.set(exercise.dayOfWeek, []);
+    }
+
+    grouped.get(exercise.dayOfWeek)?.push(exercise);
   });
+
+  // Sort exercises by order within each day
+  for (const [day, exs] of grouped.entries()) {
+    grouped.set(
+      day,
+      exs.sort((a, b) => a.order - b.order)
+    );
+  }
+
+  return grouped;
+}
+
+// Convert day number to day name
+function getDayName(day: number): string {
+  const days = [
+    'Sunday',
+    'Monday',
+    'Tuesday',
+    'Wednesday',
+    'Thursday',
+    'Friday',
+    'Saturday',
+  ];
+  return days[day % 7];
+}
+
+export default function PlanSummaryScreen() {
+  const navigation = useNavigation<PlanSummaryScreenNavigationProp>();
+  const route = useRoute<PlanSummaryScreenRouteProp>();
+  const { plan } = route.params;
+
+  const groupedExercises = groupExercisesByDay(plan.exercises);
+  const dayNumbers = Array.from(groupedExercises.keys()).sort();
+
+  return (
+    <ScrollView className='flex-1 bg-background'>
+      <View className='p-4'>
+        <View className='mb-4'>
+          <Text className='text-3xl font-bold text-primary'>{plan.name}</Text>
+          {plan.description ? (
+            <Text className='text-text-muted mt-1'>{plan.description}</Text>
+          ) : null}
+        </View>
+
+        <View className='bg-white rounded-xl p-5 shadow-md mb-6'>
+          <Text className='text-xl font-semibold text-text mb-2'>
+            Plan Overview
+          </Text>
+          <Text className='text-text'>
+            {dayNumbers.length} training days per week
+          </Text>
+          <Text className='text-text'>
+            {plan.exercises.length} total exercises
+          </Text>
+          <Text className='text-text'>
+            Created: {new Date(plan.createdAt).toLocaleDateString()}
+          </Text>
+        </View>
+
+        {dayNumbers.length > 0 ? (
+          dayNumbers.map((day) => (
+            <View key={day} className='mb-6'>
+              <Text className='text-xl font-bold text-primary mb-2'>
+                Day {day}: {getDayName(day)}
+              </Text>
+
+              <FlatList
+                data={groupedExercises.get(day)}
+                keyExtractor={(item) => item.id}
+                renderItem={({ item }) => <ExerciseCard exercise={item} />}
+                scrollEnabled={false}
+                ItemSeparatorComponent={() => <View className='h-2' />}
+              />
+            </View>
+          ))
+        ) : (
+          <View className='bg-white rounded-xl p-5 shadow-md'>
+            <Text className='text-text text-center'>
+              No exercises found in this plan. Try generating a new plan.
+            </Text>
+          </View>
+        )}
+
+        <View className='mt-4 mb-8'>
+          <TouchableOpacity
+            className='bg-primary p-4 rounded-lg mb-3'
+            onPress={() => navigation.navigate('Home')}>
+            <Text className='text-white font-semibold text-center'>
+              Back to Home
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </ScrollView>
+  );
+}
+</file>
+
+<file path="mobile/src/screens/ProfileScreen.tsx">
+import React from 'react';
+import { View, Text, TouchableOpacity, ScrollView } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+
+import { RootStackParamList } from '../navigation';
+import { useAuth } from '../context/AuthContext';
+
+type ProfileScreenNavigationProp = NativeStackNavigationProp<
+  RootStackParamList,
+  'Profile'
+>;
+
+interface ProfileSectionProps {
+  title: string;
+  children: React.ReactNode;
+}
+
+function ProfileSection({ title, children }: ProfileSectionProps) {
+  return (
+    <View className='bg-white rounded-xl p-5 shadow-md mb-4'>
+      <Text className='text-xl font-bold mb-3 text-text'>{title}</Text>
+      {children}
+    </View>
+  );
+}
+
+export default function ProfileScreen() {
+  const navigation = useNavigation<ProfileScreenNavigationProp>();
+  const { user, logout } = useAuth();
+
+  return (
+    <ScrollView className='flex-1 bg-background p-4'>
+      <ProfileSection title='Your Information'>
+        <View className='space-y-2'>
+          <Text className='text-text-muted'>Name</Text>
+          <Text className='text-text font-medium'>John Doe</Text>
+
+          <Text className='text-text-muted mt-2'>Email</Text>
+          <Text className='text-text font-medium'>john.doe@example.com</Text>
+
+          <Text className='text-text-muted mt-2'>Fitness Level</Text>
+          <Text className='text-text font-medium'>Intermediate</Text>
+        </View>
+      </ProfileSection>
+
+      <ProfileSection title='Stats'>
+        <View className='flex-row justify-between'>
+          <View className='items-center'>
+            <Text className='text-primary text-2xl font-bold'>12</Text>
+            <Text className='text-text-muted'>Workouts</Text>
+          </View>
+
+          <View className='items-center'>
+            <Text className='text-primary text-2xl font-bold'>3</Text>
+            <Text className='text-text-muted'>Plans</Text>
+          </View>
+
+          <View className='items-center'>
+            <Text className='text-primary text-2xl font-bold'>28</Text>
+            <Text className='text-text-muted'>Days active</Text>
+          </View>
+        </View>
+      </ProfileSection>
+
+      <ProfileSection title='Account'>
+        <TouchableOpacity
+          className='bg-gray-200 p-4 rounded-lg mb-3'
+          onPress={() => console.log('Edit profile')}>
+          <Text className='text-text font-semibold text-center'>
+            Edit Profile
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          className='bg-red-100 p-4 rounded-lg'
+          onPress={() => logout()}>
+          <Text className='text-red-500 font-semibold text-center'>Logout</Text>
+        </TouchableOpacity>
+      </ProfileSection>
+    </ScrollView>
+  );
+}
+</file>
+
+<file path="mobile/src/screens/RegisterScreen.tsx">
+import React, { useState } from 'react';
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+} from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+
+import { useAuth } from '../context/AuthContext';
+import { isValidEmail, isValidPassword } from '../utils/validation';
+import { RootStackParamList } from '../navigation';
+
+type RegisterScreenNavigationProp = NativeStackNavigationProp<
+  RootStackParamList,
+  'Register'
+>;
+
+interface RegisterFormData {
+  email: string;
+  password: string;
+  confirmPassword: string;
+  firstName: string;
+  lastName: string;
+}
+
+interface FormErrors {
+  email?: string;
+  password?: string;
+  confirmPassword?: string;
+  firstName?: string;
+  lastName?: string;
+}
+
+export default function RegisterScreen() {
+  const navigation = useNavigation<RegisterScreenNavigationProp>();
+  const { register, isLoading, error, clearError } = useAuth();
+
+  const [formData, setFormData] = useState<RegisterFormData>({
+    email: '',
+    password: '',
+    confirmPassword: '',
+    firstName: '',
+    lastName: '',
+  });
+
+  const [formErrors, setFormErrors] = useState<FormErrors>({});
+
+  // Clear auth context errors when component unmounts
+  React.useEffect(() => {
+    return () => {
+      clearError();
+    };
+  }, [clearError]);
+
+  // Display auth error as an alert
+  React.useEffect(() => {
+    if (error) {
+      Alert.alert('Registration Error', error);
+    }
+  }, [error]);
+
+  function validateForm(): boolean {
+    const errors: FormErrors = {};
+    let isValid = true;
+
+    // Email validation
+    if (!formData.email) {
+      errors.email = 'Email is required';
+      isValid = false;
+    } else if (!isValidEmail(formData.email)) {
+      errors.email = 'Please enter a valid email';
+      isValid = false;
+    }
+
+    // Password validation
+    if (!formData.password) {
+      errors.password = 'Password is required';
+      isValid = false;
+    } else if (!isValidPassword(formData.password)) {
+      errors.password =
+        'Password must be at least 8 characters with uppercase, lowercase, and numbers';
+      isValid = false;
+    }
+
+    // Confirm password
+    if (!formData.confirmPassword) {
+      errors.confirmPassword = 'Please confirm your password';
+      isValid = false;
+    } else if (formData.password !== formData.confirmPassword) {
+      errors.confirmPassword = 'Passwords do not match';
+      isValid = false;
+    }
+
+    // Name validation
+    if (!formData.firstName) {
+      errors.firstName = 'First name is required';
+      isValid = false;
+    }
+
+    if (!formData.lastName) {
+      errors.lastName = 'Last name is required';
+      isValid = false;
+    }
+
+    setFormErrors(errors);
+    return isValid;
+  }
+
+  async function handleRegister() {
+    if (!validateForm()) return;
+
+    try {
+      await register({
+        email: formData.email,
+        password: formData.password,
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+      });
+    } catch (err) {
+      // Error is handled by the AuthContext
+    }
+  }
+
+  function navigateToLogin() {
+    navigation.navigate('Login');
+  }
+
+  return (
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      className='flex-1 bg-background'>
+      <ScrollView contentContainerClassName='pb-10'>
+        <View className='p-6'>
+          <View className='mb-6'>
+            <Text className='text-3xl font-bold text-center text-primary'>
+              Create Account
+            </Text>
+            <Text className='text-base text-center text-text-muted mt-2'>
+              Join our fitness community and start your journey
+            </Text>
+          </View>
+
+          {/* Email Field */}
+          <View className='mb-4'>
+            <Text className='text-sm font-medium text-text mb-1'>Email</Text>
+            <TextInput
+              className={`bg-white p-3 rounded-lg border ${
+                formErrors.email ? 'border-red-500' : 'border-gray-200'
+              }`}
+              placeholder='your@email.com'
+              keyboardType='email-address'
+              autoCapitalize='none'
+              value={formData.email}
+              onChangeText={(text) => {
+                setFormData({ ...formData, email: text });
+                if (formErrors.email) {
+                  setFormErrors({ ...formErrors, email: undefined });
+                }
+              }}
+            />
+            {formErrors.email && (
+              <Text className='text-red-500 text-xs mt-1'>
+                {formErrors.email}
+              </Text>
+            )}
+          </View>
+
+          {/* First Name Field */}
+          <View className='mb-4'>
+            <Text className='text-sm font-medium text-text mb-1'>
+              First Name
+            </Text>
+            <TextInput
+              className={`bg-white p-3 rounded-lg border ${
+                formErrors.firstName ? 'border-red-500' : 'border-gray-200'
+              }`}
+              placeholder='John'
+              value={formData.firstName}
+              onChangeText={(text) => {
+                setFormData({ ...formData, firstName: text });
+                if (formErrors.firstName) {
+                  setFormErrors({ ...formErrors, firstName: undefined });
+                }
+              }}
+            />
+            {formErrors.firstName && (
+              <Text className='text-red-500 text-xs mt-1'>
+                {formErrors.firstName}
+              </Text>
+            )}
+          </View>
+
+          {/* Last Name Field */}
+          <View className='mb-4'>
+            <Text className='text-sm font-medium text-text mb-1'>
+              Last Name
+            </Text>
+            <TextInput
+              className={`bg-white p-3 rounded-lg border ${
+                formErrors.lastName ? 'border-red-500' : 'border-gray-200'
+              }`}
+              placeholder='Doe'
+              value={formData.lastName}
+              onChangeText={(text) => {
+                setFormData({ ...formData, lastName: text });
+                if (formErrors.lastName) {
+                  setFormErrors({ ...formErrors, lastName: undefined });
+                }
+              }}
+            />
+            {formErrors.lastName && (
+              <Text className='text-red-500 text-xs mt-1'>
+                {formErrors.lastName}
+              </Text>
+            )}
+          </View>
+
+          {/* Password Field */}
+          <View className='mb-4'>
+            <Text className='text-sm font-medium text-text mb-1'>Password</Text>
+            <TextInput
+              className={`bg-white p-3 rounded-lg border ${
+                formErrors.password ? 'border-red-500' : 'border-gray-200'
+              }`}
+              placeholder='Password'
+              secureTextEntry
+              value={formData.password}
+              onChangeText={(text) => {
+                setFormData({ ...formData, password: text });
+                if (formErrors.password) {
+                  setFormErrors({ ...formErrors, password: undefined });
+                }
+              }}
+            />
+            {formErrors.password && (
+              <Text className='text-red-500 text-xs mt-1'>
+                {formErrors.password}
+              </Text>
+            )}
+          </View>
+
+          {/* Confirm Password Field */}
+          <View className='mb-6'>
+            <Text className='text-sm font-medium text-text mb-1'>
+              Confirm Password
+            </Text>
+            <TextInput
+              className={`bg-white p-3 rounded-lg border ${
+                formErrors.confirmPassword
+                  ? 'border-red-500'
+                  : 'border-gray-200'
+              }`}
+              placeholder='Confirm Password'
+              secureTextEntry
+              value={formData.confirmPassword}
+              onChangeText={(text) => {
+                setFormData({ ...formData, confirmPassword: text });
+                if (formErrors.confirmPassword) {
+                  setFormErrors({ ...formErrors, confirmPassword: undefined });
+                }
+              }}
+            />
+            {formErrors.confirmPassword && (
+              <Text className='text-red-500 text-xs mt-1'>
+                {formErrors.confirmPassword}
+              </Text>
+            )}
+          </View>
+
+          {/* Register Button */}
+          <TouchableOpacity
+            className={`${isLoading ? 'bg-gray-400' : 'bg-primary'} p-4 rounded-lg mb-4`}
+            onPress={handleRegister}
+            disabled={isLoading}>
+            {isLoading ? (
+              <ActivityIndicator color='white' />
+            ) : (
+              <Text className='text-white font-semibold text-center'>
+                Create Account
+              </Text>
+            )}
+          </TouchableOpacity>
+
+          {/* Login Link */}
+          <View className='flex-row justify-center'>
+            <Text className='text-text-muted'>Already have an account? </Text>
+            <TouchableOpacity onPress={navigateToLogin}>
+              <Text className='text-primary font-medium'>Sign in</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
+  );
+}
+</file>
+
+<file path="mobile/src/utils/nativewind-setup.ts">
+/**
+ * This file ensures NativeWind is properly set up with React Native
+ */
+import { Text, View, TouchableOpacity } from 'react-native';
+import '../../global.css';
+
+// For NativeWind v4, we don't need to explicitly style components
+// They are automatically styled when using className
+// This file is imported in App.tsx to ensure NativeWind is configured properly
+</file>
+
+<file path="mobile/src/utils/validation.ts">
+/**
+ * Utility functions for form validation
+ */
+
+/**
+ * Validates an email address format
+ */
+export function isValidEmail(email: string): boolean {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return emailRegex.test(email);
+}
+
+/**
+ * Validates password requirements
+ * - At least 8 characters
+ * - Contains at least one uppercase letter
+ * - Contains at least one lowercase letter
+ * - Contains at least one number
+ */
+export function isValidPassword(password: string): boolean {
+  if (password.length < 8) return false;
+
+  const hasUppercase = /[A-Z]/.test(password);
+  const hasLowercase = /[a-z]/.test(password);
+  const hasNumber = /[0-9]/.test(password);
+
+  return hasUppercase && hasLowercase && hasNumber;
+}
+
+/**
+ * Checks if a string is empty or only whitespace
+ */
+export function isEmpty(value: string | null | undefined): boolean {
+  return value === null || value === undefined || value.trim() === '';
+}
+
+/**
+ * Validates a numeric input is within a given range
+ */
+export function isInRange(value: number, min: number, max: number): boolean {
+  return value >= min && value <= max;
+}
+
+/**
+ * Formats validation errors into user-friendly messages
+ */
+export function getValidationErrors(
+  fields: Record<string, any>
+): Record<string, string> {
+  const errors: Record<string, string> = {};
+
+  Object.entries(fields).forEach(([field, value]) => {
+    // Email validation
+    if (field === 'email' && !isValidEmail(value as string)) {
+      errors[field] = 'Please enter a valid email address';
+    }
+
+    // Password validation
+    if (field === 'password' && !isValidPassword(value as string)) {
+      errors[field] =
+        'Password must be at least 8 characters and include uppercase, lowercase, and numbers';
+    }
+
+    // Required fields
+    if (isEmpty(value as string) && !errors[field]) {
+      errors[field] = `${
+        field.charAt(0).toUpperCase() + field.slice(1)
+      } is required`;
+    }
+  });
+
+  return errors;
+}
+</file>
+
+<file path="mobile/src/App.tsx">
+import React from 'react';
+import { StatusBar } from 'expo-status-bar';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { NavigationContainer } from '@react-navigation/native';
+
+// Import NativeWind setup
+import './utils/nativewind-setup';
+
+import { AuthProvider } from './context/AuthContext';
+import Navigation from './navigation';
+
+function App() {
+  return (
+    <SafeAreaProvider>
+      <AuthProvider>
+        <NavigationContainer>
+          <Navigation />
+          <StatusBar style='auto' />
+        </NavigationContainer>
+      </AuthProvider>
+    </SafeAreaProvider>
+  );
+}
+
+export default App;
+</file>
+
+<file path="mobile/src/types.d.ts">
+/// <reference types="nativewind/types" />
+</file>
+
+<file path="mobile/.env.example">
+# API Configuration
+GRPC_ENDPOINT=http://localhost:8080
+API_KEY=your_api_key_here
+
+# App Configuration
+APP_ENV=development
+DEBUG_MODE=true
+
+# Feature Flags
+ENABLE_ANALYTICS=false
+</file>
+
+<file path="mobile/app.d.ts">
+// TypeScript declarations for third-party libraries
+
+// react-native-config - Environment variables
+declare module 'react-native-config' {
+  interface ConfigInterface {
+    GRPC_ENDPOINT?: string;
+    API_KEY?: string;
+    APP_ENV?: string;
+    DEBUG_MODE?: string;
+    ENABLE_ANALYTICS?: string;
+    [key: string]: string | undefined;
+  }
+  const Config: ConfigInterface;
+  export default Config;
+}
+
+// @improbable-eng/grpc-web (simplified declaration)
+declare module '@improbable-eng/grpc-web' {
+  export namespace grpc {
+    export interface Metadata {
+      [key: string]: string;
+    }
+  }
+}
+</file>
+
+<file path="mobile/App.tsx">
+import App from './src/App';
+
+export default App;
+</file>
+
+<file path="mobile/babel.config.js">
+module.exports = function (api) {
+  api.cache(true);
+  return {
+    presets: [
+      ['babel-preset-expo', { jsxImportSource: 'nativewind' }],
+      'nativewind/babel',
+    ],
+  };
 };
-```
+</file>
 
-## Generación de Código gRPC para TypeScript
+<file path="mobile/global.css">
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+</file>
 
-Para generar el código TypeScript a partir de las definiciones proto:
+<file path="mobile/metro.config.js">
+const { getDefaultConfig } = require('expo/metro-config');
+const { withNativeWind } = require('nativewind/metro');
 
-```bash
-# Instalación de herramientas
-npm install -g grpc-tools
-npm install -g protoc-gen-ts
+const config = getDefaultConfig(__dirname);
 
-# Generación de código
-mkdir -p src/generated
-protoc \
-  --plugin=protoc-gen-ts=./node_modules/.bin/protoc-gen-ts \
-  --ts_out=service=grpc-node:./src/generated \
-  --js_out=import_style=commonjs,binary:./src/generated \
-  --grpc_out=grpc_js:./src/generated \
-  ../proto/services.proto
-```
+module.exports = withNativeWind(config, { input: './global.css' });
+</file>
 
-## Notas Importantes
+<file path="mobile/nativewind-env.d.ts">
+/// <reference types="nativewind/types" />
 
-- Para entornos de producción, debes usar credenciales seguras (TLS/SSL) en lugar de `credentials.createInsecure()`.
-- Puedes usar servicios como Envoy o grpc-web para facilitar la comunicación gRPC desde dispositivos móviles.
+// NOTE: This file should not be edited and should be committed with your source code. It is generated by NativeWind.
+</file>
+
+<file path="mobile/postcss.config.js">
+module.exports = {
+  plugins: {
+    'nativewind/postcss': {
+      tailwindConfig: './tailwind.config.js',
+    },
+  },
+};
+</file>
+
+<file path="mobile/react-native.config.js">
+module.exports = {
+  project: {
+    ios: {},
+    android: {},
+  },
+  assets: ['./assets/fonts/'],
+  dependencies: {
+    // Force resolution of peer dependencies
+  },
+};
+</file>
+
+<file path="mobile/tailwind.config.js">
+/** @type {import('tailwindcss').Config} */
+module.exports = {
+  content: ['./src/**/*.{js,jsx,ts,tsx}'],
+  theme: {
+    extend: {
+      colors: {
+        primary: {
+          DEFAULT: '#3B82F6',
+          dark: '#1D4ED8',
+          light: '#93C5FD',
+        },
+        secondary: {
+          DEFAULT: '#10B981',
+          dark: '#059669',
+          light: '#6EE7B7',
+        },
+        background: {
+          DEFAULT: '#F9FAFB',
+          dark: '#1F2937',
+        },
+        text: {
+          DEFAULT: '#1F2937',
+          light: '#F9FAFB',
+          muted: '#6B7280',
+        },
+      },
+    },
+  },
+  plugins: [],
+  presets: [require('nativewind/preset')],
+};
+</file>
+
+<file path="mobile/tsconfig.json">
+{
+    "extends": "@tsconfig/react-native/tsconfig.json",
+    "compilerOptions": {
+        "strict": true,
+        "baseUrl": ".",
+        "paths": {
+            "@/*": [
+                "src/*"
+            ]
+        },
+        "jsx": "react-native",
+        "lib": [
+            "es2017",
+            "dom"
+        ],
+        "skipLibCheck": true,
+        "resolveJsonModule": true,
+        "typeRoots": [
+            "node_modules/@types",
+            "./node_modules/react-native/types",
+            "./src"
+        ],
+        "types": [
+            "react",
+        ]
+    },
+    "include": [
+        "src",
+        "**/*.ts",
+        "**/*.tsx",
+        "app.d.ts",
+        "src/types.d.ts",
+        "nativewind-env.d.ts"
+    ],
+    "exclude": [
+        "node_modules",
+        "babel.config.js",
+        "metro.config.js"
+    ]
+}
 </file>
 
 <file path="server/generated/prisma/runtime/binary.d.ts">
@@ -6211,179 +7473,426 @@ EXPOSE 3000
 CMD ["npm", "start"]
 </file>
 
-<file path="proto/services.proto">
-syntax = "proto3";
+<file path="mobile/src/context/AuthContext.tsx">
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import grpcClient, {
+  UserProfile,
+  AuthResponse,
+  ProfileData,
+} from '../services/grpcClient';
 
-package fitness;
+// Auth storage keys
+const AUTH_TOKEN_KEY = '@fitness_app:auth_token';
+const USER_DATA_KEY = '@fitness_app:user_data';
 
-// User service for account management
-service UserService {
-  rpc GetUserProfile(UserIdRequest) returns (UserProfileResponse);
-  rpc CreateUserProfile(CreateUserRequest) returns (UserProfileResponse);
-  rpc UpdateUserProfile(UpdateUserRequest) returns (UserProfileResponse);
-  rpc AuthenticateUser(LoginRequest) returns (AuthResponse);
+interface AuthContextType {
+  user: UserProfile | null;
+  isAuthenticated: boolean;
+  isLoading: boolean;
+  error: string | null;
+  login: (email: string, password: string) => Promise<void>;
+  register: (data: RegisterData) => Promise<void>;
+  logout: () => Promise<void>;
+  clearError: () => void;
 }
 
-// Training service for workout plans
-service TrainingService {
-  rpc GetTrainingPlan(TrainingIdRequest) returns (TrainingPlanResponse);
-  rpc GenerateTrainingPlan(TrainingPlanRequest) returns (TrainingPlanResponse);
-  rpc UpdateTrainingPlan(UpdateTrainingRequest) returns (TrainingPlanResponse);
-  rpc ListUserTrainingPlans(UserIdRequest) returns (TrainingPlansListResponse);
-  rpc SubmitSessionFeedback(SubmitSessionFeedbackRequest) returns (SubmitSessionFeedbackResponse);
-  rpc GenerateProgressionSuggestions(ProgressionSuggestionsRequest) returns (ProgressionSuggestionsResponse);
+export interface RegisterData {
+  email: string;
+  password: string;
+  firstName: string;
+  lastName: string;
+  profileData?: ProfileData;
 }
 
-// User related messages
-message UserIdRequest {
-  string userId = 1;
+interface AuthProviderProps {
+  children: React.ReactNode;
 }
 
-message CreateUserRequest {
-  string email = 1;
-  string password = 2;
-  string firstName = 3;
-  string lastName = 4;
-  ProfileData profileData = 5;
-}
+const AuthContext = createContext<AuthContextType>({
+  user: null,
+  isAuthenticated: false,
+  isLoading: true,
+  error: null,
+  login: async () => {},
+  register: async () => {},
+  logout: async () => {},
+  clearError: () => {},
+});
 
-message UpdateUserRequest {
-  string userId = 1;
-  string firstName = 2;
-  string lastName = 3;
-  ProfileData profileData = 4;
-}
+export const useAuth = () => useContext(AuthContext);
 
-message LoginRequest {
-  string email = 1;
-  string password = 2;
-}
+export function AuthProvider({ children }: AuthProviderProps) {
+  const [user, setUser] = useState<UserProfile | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-message AuthResponse {
-  string token = 1;
-  UserProfile user = 2;
-}
+  // Check if user is already logged in
+  useEffect(() => {
+    const checkAuthStatus = async () => {
+      try {
+        setIsLoading(true);
 
-message UserProfileResponse {
-  string id = 1;
-  string email = 2;
-  string firstName = 3;
-  string lastName = 4;
-  ProfileData profile = 5;
-}
+        // Get stored auth data
+        const storedToken = await AsyncStorage.getItem(AUTH_TOKEN_KEY);
+        const storedUserData = await AsyncStorage.getItem(USER_DATA_KEY);
 
-message ProfileData {
-  int32 age = 1;
-  float weight = 2;
-  float height = 3;
-  string fitnessLevel = 4;
-  repeated string fitnessGoals = 5;
-  repeated string medicalIssues = 6;
-  repeated string availableEquipment = 7;
-  string trainingPreferences = 8; // JSON string
-}
+        if (storedToken && storedUserData) {
+          // Set the auth token on the gRPC client
+          grpcClient.setAuthToken(storedToken);
 
-message UserProfile {
-  string id = 1;
-  string email = 2;
-  string firstName = 3;
-  string lastName = 4;
-}
+          // Parse and set the user data
+          const userData = JSON.parse(storedUserData) as UserProfile;
+          setUser(userData);
+        }
+      } catch (err) {
+        console.error('Authentication check failed:', err);
+        setError('Failed to restore authentication session');
+      } finally {
+        setIsLoading(false);
+      }
+    };
 
-// Training related messages
-message TrainingIdRequest {
-  string trainingId = 1;
-}
+    checkAuthStatus();
+  }, []);
 
-message TrainingPlanRequest {
-  string userId = 1;
-  string name = 2;
-  string description = 3;
-  int32 daysPerWeek = 4;
-  string focusArea = 5;
-  int32 sessionDuration = 6;
-  bool includeWarmup = 7;
-  bool includeCooldown = 8;
-}
+  const storeAuthData = async (token: string, userData: UserProfile) => {
+    try {
+      await AsyncStorage.setItem(AUTH_TOKEN_KEY, token);
+      await AsyncStorage.setItem(USER_DATA_KEY, JSON.stringify(userData));
 
-message UpdateTrainingRequest {
-  string trainingId = 1;
-  string name = 2;
-  string description = 3;
-  bool isActive = 4;
-  repeated ExerciseData exercises = 5;
-}
+      // Set token on the gRPC client for future authenticated requests
+      grpcClient.setAuthToken(token);
+    } catch (err) {
+      console.error('Failed to store auth data:', err);
+      throw new Error('Failed to save authentication data');
+    }
+  };
 
-message TrainingPlanResponse {
-  string id = 1;
-  string userId = 2;
-  string name = 3;
-  string description = 4;
-  string createdAt = 5;
-  string updatedAt = 6;
-  bool isActive = 7;
-  string generatedBy = 8;
-  repeated ExerciseData exercises = 9;
-}
+  const login = async (email: string, password: string) => {
+    setIsLoading(true);
+    setError(null);
 
-message TrainingPlansListResponse {
-  repeated TrainingPlanResponse trainings = 1;
-}
+    try {
+      // Call the gRPC service to authenticate
+      const response = await grpcClient.userService.authenticateUser({
+        email,
+        password,
+      });
 
-message ExerciseData {
-  string id = 1;
-  string name = 2;
-  string description = 3;
-  int32 sets = 4;
-  string reps = 5;
-  int32 restTime = 6;
-  string notes = 7;
-  int32 dayOfWeek = 8;
-  int32 order = 9;
-}
+      // Store auth data
+      await storeAuthData(response.token, response.user);
 
-// Session feedback related messages
-message ExerciseFeedback {
-  string exercise_name = 1;
-  string reps = 2;
-  float weight = 3;
-  int32 rir = 4;
-  string notes = 5;
-}
+      // Update state
+      setUser(response.user);
+    } catch (err: any) {
+      console.error('Login failed:', err);
+      setError(err.message || 'Login failed. Please check your credentials.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-message SubmitSessionFeedbackRequest {
-  string user_id = 1;
-  string session_id = 2;
-  repeated ExerciseFeedback exercises_feedback = 3;
-}
+  const register = async (data: RegisterData) => {
+    setIsLoading(true);
+    setError(null);
 
-message SubmitSessionFeedbackResponse {
-  bool success = 1;
-  string message = 2;
-}
+    try {
+      // Call the gRPC service to create a user
+      const response = await grpcClient.userService.createUserProfile({
+        email: data.email,
+        password: data.password,
+        firstName: data.firstName,
+        lastName: data.lastName,
+        profileData: data.profileData || {},
+      });
 
-// Progression suggestions related messages
-message ProgressionSuggestionsRequest {
-  string user_id = 1;
-  string training_plan_id = 2;
-  int32 history_weeks = 3; // Number of weeks of history to analyze (2-4 typically)
-}
+      // After successful registration, automatically log the user in
+      await login(data.email, data.password);
+    } catch (err: any) {
+      console.error('Registration failed:', err);
+      setError(err.message || 'Registration failed. Please try again.');
+      setIsLoading(false);
+    }
+  };
 
-message ExerciseModificationSuggestion {
-  string exercise_id = 1;
-  string suggestion = 2;
-  float new_weight = 3;
-  string replace_with = 4;
-}
+  const logout = async () => {
+    setIsLoading(true);
 
-message ProgressionSuggestionsResponse {
-  string training_plan_id = 1;
-  bool deload_recommended = 2;
-  string summary = 3;
-  repeated ExerciseModificationSuggestion modified_exercises = 4;
-  string generated_at = 5;
-  string model_used = 6;
+    try {
+      // Clear stored auth data
+      await AsyncStorage.removeItem(AUTH_TOKEN_KEY);
+      await AsyncStorage.removeItem(USER_DATA_KEY);
+
+      // Clear auth token from gRPC client
+      grpcClient.clearAuthToken();
+
+      // Update state
+      setUser(null);
+    } catch (err) {
+      console.error('Logout failed:', err);
+      setError('Failed to logout properly');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const clearError = () => setError(null);
+
+  return (
+    <AuthContext.Provider
+      value={{
+        user,
+        isAuthenticated: !!user,
+        isLoading,
+        error,
+        login,
+        register,
+        logout,
+        clearError,
+      }}>
+      {children}
+    </AuthContext.Provider>
+  );
 }
+</file>
+
+<file path="mobile/src/screens/HomeScreen.tsx">
+import React from 'react';
+import { View, Text, TouchableOpacity } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+
+import { RootStackParamList } from '../navigation';
+import { useAuth } from '../context/AuthContext';
+
+type HomeScreenNavigationProp = NativeStackNavigationProp<
+  RootStackParamList,
+  'Home'
+>;
+
+export default function HomeScreen() {
+  const navigation = useNavigation<HomeScreenNavigationProp>();
+  const { user } = useAuth();
+
+  return (
+    <View className='flex-1 items-center justify-center bg-background p-4'>
+      <View className='mb-8'>
+        <Text className='text-3xl font-bold text-center text-primary mb-2'>
+          Welcome to Fitness AI
+        </Text>
+        <Text className='text-lg text-center text-text-muted'>
+          Your intelligent workout companion
+        </Text>
+      </View>
+
+      <View className='w-full max-w-sm bg-white rounded-xl p-5 shadow-md mb-4'>
+        <Text className='text-xl font-bold mb-3 text-text'>Quick Actions</Text>
+
+        <TouchableOpacity
+          className='bg-primary p-4 rounded-lg mb-3'
+          onPress={() => navigation.navigate('GeneratePlan')}>
+          <Text className='text-white font-semibold text-center'>
+            Create Training Plan
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          className='bg-secondary p-4 rounded-lg mb-3'
+          onPress={() => console.log('Start Workout')}>
+          <Text className='text-white font-semibold text-center'>
+            Start Workout
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          className='bg-gray-200 p-4 rounded-lg'
+          onPress={() => navigation.navigate('Profile')}>
+          <Text className='text-text font-semibold text-center'>
+            View Profile
+          </Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+</file>
+
+<file path="mobile/package.json">
+{
+  "name": "fitness-ai-app-mobile",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web",
+    "eject": "expo eject",
+    "lint": "eslint .",
+    "test": "jest"
+  },
+  "dependencies": {
+    "@improbable-eng/grpc-web": "^0.15.0",
+    "@react-native-async-storage/async-storage": "^2.1.2",
+    "@react-navigation/native": "^7.1.6",
+    "@react-navigation/native-stack": "^7.3.10",
+    "expo": "^52.0.44",
+    "expo-status-bar": "~2.1.0",
+    "google-protobuf": "^3.21.2",
+    "grpc-web": "^1.4.2",
+    "nativewind": "^4.1.23",
+    "react": "^18.2.0",
+    "react-native": "^0.73.6",
+    "react-native-config": "^1.5.1",
+    "react-native-safe-area-context": "5.3.0",
+    "react-native-screens": "~4.10.0",
+    "zustand": "^5.0.3"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.26.10",
+    "@tsconfig/react-native": "^3.0.5",
+    "@types/google-protobuf": "^3.15.12",
+    "@types/jest": "^29.5.14",
+    "@types/react": "~18.2.0",
+    "@types/react-native": "^0.73.0",
+    "@types/react-test-renderer": "^19.1.0",
+    "babel-plugin-module-resolver": "^5.0.2",
+    "babel-preset-expo": "^13.1.0",
+    "eslint": "^9.24.0",
+    "expo-module-scripts": "^4.0.5",
+    "jest": "^29.7.0",
+    "protobufjs": "^7.2.6",
+    "react-native-typescript-transformer": "^1.2.13",
+    "tailwindcss": "^3.3.2",
+    "typescript": "^5.8.3"
+  },
+  "packageManager": "yarn@1.22.22+sha512.a6b2f7906b721bba3d67d4aff083df04dad64c399707841b7acf00f6b133b7ac24255f2652fa22ae3534329dc6180534e98d17432037ff6fd140556e2bb3137e"
+}
+</file>
+
+<file path="mobile/README.md">
+# Fitness AI Mobile App
+
+React Native mobile application for the Fitness AI training system. This app allows users to view and manage their workout plans, track progress, and get AI-generated training suggestions.
+
+## Features
+
+- User authentication (login/logout)
+- View and manage training plans
+- Track workout sessions
+- Submit session feedback
+- Get AI-generated training suggestions
+
+## Tech Stack
+
+- React Native with Expo
+- TypeScript
+- React Navigation
+- NativeWind (Tailwind CSS for React Native)
+- gRPC-Web for API communication
+- Zustand for state management
+
+## Getting Started
+
+### Prerequisites
+
+- Node.js 16+
+- npm or yarn
+- Android Studio / Xcode for emulators
+- Optional: Physical device for testing
+
+### Installation
+
+1. Install dependencies:
+
+```bash
+cd mobile
+npm install
+```
+
+2. Set up environment variables:
+
+```bash
+cp .env.example .env
+```
+
+Edit the `.env` file with your configuration.
+
+### Running in Development
+
+#### Using Expo
+
+Start the development server:
+
+```bash
+npm start
+```
+
+This will open the Expo developer tools. You can:
+- Press 'a' to open on Android emulator
+- Press 'i' to open on iOS simulator
+- Scan the QR code with Expo Go on your physical device
+
+#### Using Docker
+
+From the project root directory:
+
+```bash
+docker-compose up mobile
+```
+
+### Building for Production
+
+#### Android
+
+```bash
+npm run android:build
+```
+
+#### iOS
+
+```bash
+npm run ios:build
+```
+
+## Project Structure
+
+```
+mobile/
+├── src/
+│   ├── App.tsx              # Entry point for the app
+│   ├── navigation/          # Navigation setup
+│   │   └── index.tsx        # Main navigator
+│   ├── screens/             # App screens
+│   │   ├── HomeScreen.tsx   # Home screen
+│   │   └── ProfileScreen.tsx # Profile screen
+│   ├── services/            # API services
+│   │   └── grpcClient.ts    # gRPC client
+│   ├── context/             # Context providers
+│   │   └── AuthContext.tsx  # Authentication context
+│   ├── components/          # Reusable components
+│   └── config/              # Configuration
+│       └── env.ts           # Environment config
+├── assets/                  # App assets
+├── .env                     # Environment variables
+├── .env.example             # Example environment variables
+├── tsconfig.json            # TypeScript configuration
+├── babel.config.js          # Babel configuration
+├── metro.config.js          # Metro bundler configuration
+└── package.json             # Dependencies
+```
+
+## Connecting to the Backend
+
+This app is configured to connect to a gRPC backend. By default, it will try to connect to `http://localhost:8080`, but you can customize this by setting the `GRPC_ENDPOINT` environment variable in your `.env` file.
+
+## Contributing
+
+1. Create a feature branch: `git checkout -b feature/my-feature`
+2. Commit your changes: `git commit -m 'Add some feature'`
+3. Push to the branch: `git push origin feature/my-feature`
+4. Submit a pull request
 </file>
 
 <file path="server/generated/prisma/index-browser.js">
@@ -8015,719 +9524,6 @@ async function saveTrainingPlanToDatabase(
 }
 </file>
 
-<file path="server/src/domain/grpc/training/trainingHandler.ts">
-import { PrismaClient } from '../../../../generated/prisma';
-import { UntypedHandleCall } from '@grpc/grpc-js';
-import { ServerUnaryCall, sendUnaryData } from '@grpc/grpc-js';
-
-// Types that would normally be imported from the generated proto files
-// These are placeholders until the actual generated types are available
-interface GeneratePlanRequest {
-  user_id: string;
-  plan_name?: string;
-  description?: string;
-}
-
-interface TrainingPlanResponse {
-  training_plan: TrainingPlan;
-}
-
-interface TrainingPlan {
-  id: string;
-  user_id: string;
-  name: string;
-  description?: string;
-  created_at: string;
-  updated_at: string;
-  is_active: boolean;
-  generated_by: string;
-  exercises: Exercise[];
-}
-
-interface Exercise {
-  id: string;
-  name: string;
-  description?: string;
-  sets: number;
-  reps: string;
-  rest_time?: number;
-  notes?: string;
-  day_of_week: number;
-  order: number;
-}
-
-interface WorkoutRecordRequest {
-  user_id: string;
-  training_id: string;
-  day_of_week: number;
-  exercise_records: ExerciseRecord[];
-  workout_date: string;
-  notes?: string;
-}
-
-interface ExerciseRecord {
-  exercise_id?: string;
-  exercise_name: string;
-  completed_sets: number;
-  completed_reps: string[];
-  weight?: number;
-  notes?: string;
-}
-
-interface WorkoutRecordResponse {
-  record_id: string;
-  user_id: string;
-  training_id: string;
-  workout_date: string;
-  exercise_records: ExerciseRecord[];
-  notes?: string;
-}
-
-// Interface for Exercise Feedback
-interface ExerciseFeedbackInput {
-  exercise_name: string;
-  reps: string;
-  weight: number;
-  rir: number;
-  notes?: string;
-}
-
-// Interface for Session Feedback Request
-interface SubmitSessionFeedbackRequest {
-  user_id: string;
-  session_id: string;
-  exercises_feedback: ExerciseFeedbackInput[];
-}
-
-// Interface for Session Feedback Response
-interface SubmitSessionFeedbackResponse {
-  success: boolean;
-  message: string;
-}
-
-// Interface for Progression Suggestions Request
-interface ProgressionSuggestionsRequest {
-  user_id: string;
-  training_plan_id: string;
-  history_weeks: number;
-}
-
-// Interface for Exercise Modification Suggestion
-interface ExerciseModificationSuggestion {
-  exercise_id: string;
-  suggestion: string;
-  new_weight?: number;
-  replace_with?: string;
-}
-
-// Interface for Progression Suggestions Response
-interface ProgressionSuggestionsResponse {
-  training_plan_id: string;
-  deload_recommended: boolean;
-  summary: string;
-  modified_exercises: ExerciseModificationSuggestion[];
-  generated_at: string;
-  model_used: string;
-}
-
-const prisma = new PrismaClient();
-
-export interface TrainingHandler {
-  GenerateTrainingPlan: UntypedHandleCall;
-  RecordWorkout: UntypedHandleCall;
-  SubmitSessionFeedback: UntypedHandleCall;
-  GenerateProgressionSuggestions: UntypedHandleCall;
-}
-
-/**
- * Handler for the gRPC TrainingService
- */
-export const trainingHandler: TrainingHandler = {
-  /**
-   * Generate a training plan for a user
-   */
-  GenerateTrainingPlan: async (
-    call: ServerUnaryCall<GeneratePlanRequest, TrainingPlanResponse>,
-    callback: sendUnaryData<TrainingPlanResponse>
-  ) => {
-    try {
-      const { user_id, plan_name, description } = call.request;
-
-      // Check if user exists
-      const user = await prisma.user.findUnique({
-        where: { id: user_id },
-      });
-
-      if (!user) {
-        return callback({
-          code: 5, // NOT_FOUND
-          message: 'User not found',
-        });
-      }
-
-      // Create a new training plan
-      const trainingPlan = await prisma.trainingPlan.create({
-        data: {
-          userId: user_id,
-          name: plan_name || 'Custom Training Plan',
-          description: description || 'Generated training plan',
-          generatedBy: 'gpt-4', // Default AI model
-        },
-      });
-
-      // Here you would typically call an AI service to generate the actual plan
-      // For now, we'll just create some placeholder training sessions for the week
-      const weekdays = [1, 2, 3, 4, 5, 6, 7]; // 1-7 for Monday-Sunday
-      const trainingSessions = await Promise.all(
-        weekdays.map(async (day) => {
-          return prisma.trainingSession.create({
-            data: {
-              trainingPlanId: trainingPlan.id,
-              userId: user_id,
-              dayOfWeek: day,
-              feedback: null,
-              completed: false,
-            },
-          });
-        })
-      );
-
-      // Format the response
-      const response: TrainingPlanResponse = {
-        training_plan: {
-          id: trainingPlan.id,
-          user_id: trainingPlan.userId,
-          name: trainingPlan.name,
-          description: trainingPlan.description || undefined,
-          created_at: trainingPlan.createdAt.toISOString(),
-          updated_at: trainingPlan.updatedAt.toISOString(),
-          is_active: trainingPlan.isActive,
-          generated_by: trainingPlan.generatedBy,
-          exercises: [], // No exercises yet, these would be added by the AI service
-        },
-      };
-
-      callback(null, response);
-    } catch (error) {
-      console.error('Error in GenerateTrainingPlan:', error);
-      callback({
-        code: 13, // INTERNAL
-        message: 'An internal error occurred',
-      });
-    }
-  },
-
-  /**
-   * Record a workout session
-   */
-  RecordWorkout: async (
-    call: ServerUnaryCall<WorkoutRecordRequest, WorkoutRecordResponse>,
-    callback: sendUnaryData<WorkoutRecordResponse>
-  ) => {
-    try {
-      const {
-        user_id,
-        training_id,
-        day_of_week,
-        exercise_records,
-        workout_date,
-        notes,
-      } = call.request;
-
-      // Check if user and training plan exist
-      const user = await prisma.user.findUnique({
-        where: { id: user_id },
-      });
-
-      if (!user) {
-        return callback({
-          code: 5, // NOT_FOUND
-          message: 'User not found',
-        });
-      }
-
-      const trainingPlan = await prisma.trainingPlan.findUnique({
-        where: { id: training_id },
-      });
-
-      if (!trainingPlan) {
-        return callback({
-          code: 5, // NOT_FOUND
-          message: 'Training plan not found',
-        });
-      }
-
-      // Find or create the training session for this day
-      let trainingSession = await prisma.trainingSession.findFirst({
-        where: {
-          trainingPlanId: training_id,
-          userId: user_id,
-          dayOfWeek: day_of_week,
-        },
-      });
-
-      if (!trainingSession) {
-        trainingSession = await prisma.trainingSession.create({
-          data: {
-            trainingPlanId: training_id,
-            userId: user_id,
-            dayOfWeek: day_of_week,
-            feedback: notes || null,
-            completed: true,
-            completedDate: new Date(workout_date),
-          },
-        });
-      } else {
-        // Update the existing session
-        trainingSession = await prisma.trainingSession.update({
-          where: { id: trainingSession.id },
-          data: {
-            feedback: notes || trainingSession.feedback,
-            completed: true,
-            completedDate: new Date(workout_date),
-          },
-        });
-      }
-
-      // Create exercise logs
-      const exerciseLogs = await Promise.all(
-        exercise_records.map(async (record: ExerciseRecord) => {
-          return prisma.exerciseLog.create({
-            data: {
-              trainingSessionId: trainingSession!.id,
-              userId: user_id,
-              exerciseName: record.exercise_name,
-              sets: record.completed_sets,
-              reps: record.completed_reps.join(', '), // Join array into string
-              weight: record.weight,
-              feedback: record.notes || null,
-            },
-          });
-        })
-      );
-
-      // Format the response
-      const response: WorkoutRecordResponse = {
-        record_id: trainingSession.id,
-        user_id: user_id,
-        training_id: training_id,
-        workout_date: workout_date,
-        exercise_records: exercise_records,
-        notes: notes || undefined,
-      };
-
-      callback(null, response);
-    } catch (error) {
-      console.error('Error in RecordWorkout:', error);
-      callback({
-        code: 13, // INTERNAL
-        message: 'An internal error occurred',
-      });
-    }
-  },
-
-  /**
-   * Submit feedback for a completed training session
-   */
-  SubmitSessionFeedback: async (
-    call: ServerUnaryCall<
-      SubmitSessionFeedbackRequest,
-      SubmitSessionFeedbackResponse
-    >,
-    callback: sendUnaryData<SubmitSessionFeedbackResponse>
-  ) => {
-    try {
-      const { user_id, session_id, exercises_feedback } = call.request;
-
-      // Validate that session exists and belongs to the user
-      const trainingSession = await prisma.trainingSession.findFirst({
-        where: {
-          id: session_id,
-          userId: user_id,
-        },
-      });
-
-      if (!trainingSession) {
-        return callback({
-          code: 5, // NOT_FOUND
-          message: 'Training session not found or does not belong to this user',
-        });
-      }
-
-      // Process each exercise feedback
-      const updatePromises = exercises_feedback.map(async (feedback) => {
-        // Find the exercise log by session and exercise name
-        const exerciseLog = await prisma.exerciseLog.findFirst({
-          where: {
-            trainingSessionId: session_id,
-            userId: user_id,
-            exerciseName: feedback.exercise_name,
-          },
-        });
-
-        if (!exerciseLog) {
-          console.error(
-            `Exercise log not found for ${feedback.exercise_name} in session ${session_id}`
-          );
-          return null;
-        }
-
-        // Update the exercise log with feedback data
-        return prisma.exerciseLog.update({
-          where: { id: exerciseLog.id },
-          data: {
-            reps: feedback.reps,
-            weight: feedback.weight,
-            rir: feedback.rir,
-            feedback: feedback.notes || exerciseLog.feedback,
-          },
-        });
-      });
-
-      // Wait for all updates to complete
-      const results = await Promise.all(updatePromises);
-
-      // Count successful updates
-      const successfulUpdates = results.filter(Boolean).length;
-
-      // Mark the session as completed if it wasn't already
-      if (!trainingSession.completed) {
-        await prisma.trainingSession.update({
-          where: { id: session_id },
-          data: {
-            completed: true,
-            completedDate: new Date(),
-          },
-        });
-      }
-
-      // Prepare the response
-      const response: SubmitSessionFeedbackResponse = {
-        success: successfulUpdates > 0,
-        message:
-          successfulUpdates > 0
-            ? `Successfully updated ${successfulUpdates} exercise logs`
-            : 'No exercise logs were updated',
-      };
-
-      callback(null, response);
-    } catch (error) {
-      console.error('Error in SubmitSessionFeedback:', error);
-      callback({
-        code: 13, // INTERNAL
-        message: 'An internal error occurred',
-      });
-    }
-  },
-
-  /**
-   * Generate progression suggestions based on user's exercise history
-   */
-  GenerateProgressionSuggestions: async (
-    call: ServerUnaryCall<
-      ProgressionSuggestionsRequest,
-      ProgressionSuggestionsResponse
-    >,
-    callback: sendUnaryData<ProgressionSuggestionsResponse>
-  ) => {
-    try {
-      const { user_id, training_plan_id, history_weeks } = call.request;
-
-      // Check if user and training plan exist
-      const user = await prisma.user.findUnique({
-        where: { id: user_id },
-      });
-
-      if (!user) {
-        return callback({
-          code: 5, // NOT_FOUND
-          message: 'User not found',
-        });
-      }
-
-      const trainingPlan = await prisma.trainingPlan.findUnique({
-        where: { id: training_plan_id },
-        include: {
-          trainingSessions: {
-            include: {
-              exerciseLogs: true,
-            },
-          },
-        },
-      });
-
-      if (!trainingPlan) {
-        return callback({
-          code: 5, // NOT_FOUND
-          message: 'Training plan not found',
-        });
-      }
-
-      // Calculate date range for the history analysis
-      const endDate = new Date();
-      const startDate = new Date();
-      startDate.setDate(startDate.getDate() - history_weeks * 7);
-
-      // Get exercise logs for the specified period
-      const exerciseLogs = await prisma.exerciseLog.findMany({
-        where: {
-          userId: user_id,
-          trainingSession: {
-            trainingPlanId: training_plan_id,
-          },
-          createdAt: {
-            gte: startDate,
-            lte: endDate,
-          },
-        },
-        orderBy: {
-          createdAt: 'asc',
-        },
-      });
-
-      // Get user profile for additional context
-      const userProfile = await prisma.profile.findUnique({
-        where: { userId: user_id },
-      });
-
-      // Group logs by exercise
-      const exerciseHistoryMap = new Map();
-
-      exerciseLogs.forEach((log) => {
-        if (!exerciseHistoryMap.has(log.exerciseName)) {
-          exerciseHistoryMap.set(log.exerciseName, []);
-        }
-        exerciseHistoryMap.get(log.exerciseName).push({
-          date: log.createdAt,
-          sets: log.sets,
-          reps: log.reps,
-          weight: log.weight,
-          rir: log.rir,
-          feedback: log.feedback,
-        });
-      });
-
-      // Convert map to array for prompt construction
-      const exerciseHistoryArray = Array.from(exerciseHistoryMap.entries()).map(
-        ([name, logs]) => ({
-          exercise_name: name,
-          history: logs,
-        })
-      );
-
-      // Construct a prompt for OpenAI to analyze the exercise history
-      const prompt = constructProgressionPrompt({
-        userId: user_id,
-        trainingPlanId: training_plan_id,
-        userProfile,
-        exerciseHistory: exerciseHistoryArray,
-        trainingPlan,
-      });
-
-      // Import OpenAI here to avoid circular dependencies
-      const OpenAI = require('openai');
-      const openai = new OpenAI({
-        apiKey: process.env.OPENAI_API_KEY,
-      });
-
-      // Call OpenAI API
-      const completion = await openai.chat.completions.create({
-        model: 'gpt-4-turbo',
-        messages: [
-          {
-            role: 'system',
-            content:
-              "You are a professional strength coach and exercise physiologist. Analyze the user's exercise history and provide specific progression suggestions.",
-          },
-          {
-            role: 'user',
-            content: prompt,
-          },
-        ],
-        response_format: { type: 'json_object' },
-        temperature: 0.2,
-      });
-
-      // Parse the response
-      const aiResponse = parseAIResponse(
-        completion.choices[0]?.message?.content || '{}'
-      );
-
-      // Format the response
-      const response: ProgressionSuggestionsResponse = {
-        training_plan_id: training_plan_id,
-        deload_recommended: aiResponse.deload_recommended || false,
-        summary:
-          aiResponse.summary ||
-          'No specific recommendations at this time. Continue with your current plan.',
-        modified_exercises:
-          aiResponse.exercise_modifications?.map((modification) => ({
-            exercise_id: modification.exercise_id,
-            suggestion: modification.suggestion,
-            new_weight: modification.new_weight,
-            replace_with: modification.replace_with,
-          })) || [],
-        generated_at: new Date().toISOString(),
-        model_used: 'gpt-4-turbo',
-      };
-
-      callback(null, response);
-    } catch (error) {
-      console.error('Error in GenerateProgressionSuggestions:', error);
-      callback({
-        code: 13, // INTERNAL
-        message: 'An internal error occurred',
-        details: error instanceof Error ? error.message : String(error),
-      });
-    }
-  },
-};
-
-/**
- * Construct the prompt for OpenAI to analyze exercise history and suggest progressions
- */
-function constructProgressionPrompt(data: {
-  userId: string;
-  trainingPlanId: string;
-  userProfile: any;
-  exerciseHistory: Array<{
-    exercise_name: string;
-    history: Array<{
-      date: Date;
-      sets: number;
-      reps: string;
-      weight?: number | null;
-      rir?: number | null;
-      feedback?: string | null;
-    }>;
-  }>;
-  trainingPlan: any;
-}): string {
-  const { userId, trainingPlanId, userProfile, exerciseHistory, trainingPlan } =
-    data;
-
-  // Format the exercise history for readability
-  const formattedExerciseHistory = exerciseHistory.map((exercise) => {
-    const historyEntries = exercise.history.map((entry) => {
-      return {
-        date: entry.date.toISOString().split('T')[0],
-        sets: entry.sets,
-        reps: entry.reps,
-        weight: entry.weight || 'bodyweight',
-        rir: entry.rir !== null ? entry.rir : 'not recorded',
-        feedback: entry.feedback || 'no feedback',
-      };
-    });
-
-    return {
-      exercise_name: exercise.exercise_name,
-      history: historyEntries,
-    };
-  });
-
-  // Create a structured prompt
-  return `
-# Exercise Progression Analysis
-
-## User Information
-- User ID: ${userId}
-- Training Plan ID: ${trainingPlanId}
-- Fitness Level: ${userProfile?.fitnessLevel || 'Unknown'}
-- Fitness Goals: ${JSON.stringify(userProfile?.fitnessGoals || [])}
-- Medical Issues: ${JSON.stringify(userProfile?.medicalIssues || [])}
-
-## Training Plan Information
-- Name: ${trainingPlan.name}
-- Description: ${trainingPlan.description || 'No description'}
-- Created: ${trainingPlan.createdAt.toISOString().split('T')[0]}
-- Is Active: ${trainingPlan.isActive}
-
-## Exercise History (Last ${
-    formattedExerciseHistory[0]?.history.length || 0
-  } Sessions)
-${JSON.stringify(formattedExerciseHistory, null, 2)}
-
-## Analysis Request
-Based on the exercise history provided:
-
-1. Analyze each exercise's progression pattern.
-2. Identify signs of plateaus, fatigue, or untapped potential.
-3. Suggest specific modifications for each exercise that needs changes.
-4. If appropriate, recommend deload for the entire routine or specific exercises.
-5. Provide an overall summary of recommended changes.
-
-Please return your analysis in the following JSON format:
-{
-  "deload_recommended": boolean,
-  "summary": "Overall summary of the analysis and recommendations",
-  "exercise_modifications": [
-    {
-      "exercise_id": "exercise_name (as identifier)",
-      "suggestion": "Detailed explanation of what to change",
-      "new_weight": optional_new_weight_recommendation_numeric,
-      "replace_with": "optional_replacement_exercise"
-    }
-  ]
-}
-`;
-}
-
-/**
- * Parse the AI response to extract progression suggestions
- */
-function parseAIResponse(response: string): {
-  deload_recommended?: boolean;
-  summary?: string;
-  exercise_modifications?: Array<{
-    exercise_id: string;
-    suggestion: string;
-    new_weight?: number;
-    replace_with?: string;
-  }>;
-} {
-  try {
-    // Parse the JSON response
-    const parsedResponse = JSON.parse(response);
-
-    // Basic validation
-    if (typeof parsedResponse !== 'object') {
-      console.error('Invalid response format: not an object');
-      return createFallbackResponse();
-    }
-
-    // Return the parsed response
-    return {
-      deload_recommended: !!parsedResponse.deload_recommended,
-      summary:
-        parsedResponse.summary || 'No specific recommendations at this time.',
-      exercise_modifications: Array.isArray(
-        parsedResponse.exercise_modifications
-      )
-        ? parsedResponse.exercise_modifications
-        : [],
-    };
-  } catch (error) {
-    console.error('Error parsing AI response:', error);
-    return createFallbackResponse();
-  }
-}
-
-/**
- * Create a fallback response for when AI parsing fails
- */
-function createFallbackResponse() {
-  return {
-    deload_recommended: false,
-    summary:
-      'Unable to generate specific recommendations at this time. Please continue with your current plan and consult with a fitness professional if needed.',
-    exercise_modifications: [],
-  };
-}
-
-// Export the training handler
-export default trainingHandler;
-</file>
-
 <file path="server/src/domain/grpc/user/userHandler.ts">
 import { PrismaClient } from '../../../../generated/prisma';
 import { sendResponse } from '../../../utils/grpcHelper';
@@ -9116,155 +9912,577 @@ declare module 'fastify' {
 export default fastifyPlugin(dbPlugin, { name: 'db' });
 </file>
 
-<file path="server/src/services/grpc.ts">
-import * as grpc from '@grpc/grpc-js';
-import * as protoLoader from '@grpc/proto-loader';
-import path from 'path';
-import { PrismaClient } from '../../generated/prisma';
-import { config } from '../config/index';
-import OpenAI from 'openai';
+<file path="mobile/src/navigation/index.tsx">
+import React from 'react';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
-// Import domain handlers
-import createUserServiceHandler from '../domain/grpc/user/userHandler';
-import { aiHandler } from '../domain/grpc/ai/aiHandler';
-import trainingHandler from '../domain/grpc/training/trainingHandler';
-// Other domain handlers will be imported similarly as they're implemented
-// import createTrainingServiceHandler from '../domain/grpc/training/trainingHandler';
+import HomeScreen from '../screens/HomeScreen';
+import ProfileScreen from '../screens/ProfileScreen';
+import LoginScreen from '../screens/LoginScreen';
+import RegisterScreen from '../screens/RegisterScreen';
+import GeneratePlanScreen from '../screens/GeneratePlanScreen';
+import PlanSummaryScreen from '../screens/PlanSummaryScreen';
+import { useAuth } from '../context/AuthContext';
+import { TrainingPlanResponse } from '../services/grpcClient';
 
-interface GrpcServiceDependencies {
-  prisma: PrismaClient;
-  jwtSecret: string;
-  tokenExpiryTime: number;
-}
+export type RootStackParamList = {
+  // Auth Screens
+  Login: undefined;
+  Register: undefined;
+  // App Screens
+  Home: undefined;
+  Profile: undefined;
+  GeneratePlan: undefined;
+  PlanSummary: { plan: TrainingPlanResponse };
+};
 
-/**
- * Initialize gRPC server with all services
- */
-export function initGrpcServer({
-  prisma,
-  jwtSecret,
-  tokenExpiryTime,
-}: GrpcServiceDependencies) {
-  const server = new grpc.Server();
+const Stack = createNativeStackNavigator<RootStackParamList>();
 
-  // Define the proto file paths
-  const PROTO_DIR = path.join(__dirname, '../../../proto');
+function Navigation() {
+  const { isAuthenticated, isLoading } = useAuth();
 
-  // Load individual service proto files
-  const userProtoPath = path.join(PROTO_DIR, 'user/user.proto');
-  const trainingProtoPath = path.join(PROTO_DIR, 'training/training.proto');
-  const aiProtoPath = path.join(PROTO_DIR, 'ai/ai.proto');
-  const servicesProtoPath = path.join(PROTO_DIR, 'services.proto');
+  // If still checking auth status, could show a splash screen or loading indicator
+  if (isLoading) {
+    return null; // Or a loading spinner component
+  }
 
-  // Load the user service
-  const userPackageDefinition = protoLoader.loadSync(userProtoPath, {
-    keepCase: true,
-    longs: String,
-    enums: String,
-    defaults: true,
-    oneofs: true,
-  });
-
-  const userProto = grpc.loadPackageDefinition(userPackageDefinition)
-    .user as any;
-
-  // Create user service handler with dependencies
-  const userHandler = createUserServiceHandler({
-    prisma,
-    jwtSecret,
-    tokenExpiryTime,
-  });
-
-  // Add user service to server
-  server.addService(userProto.UserService.service, userHandler);
-
-  // Load the services proto which includes the TrainingService
-  const servicesPackageDefinition = protoLoader.loadSync(servicesProtoPath, {
-    keepCase: true,
-    longs: String,
-    enums: String,
-    defaults: true,
-    oneofs: true,
-  });
-
-  const servicesProto = grpc.loadPackageDefinition(servicesPackageDefinition)
-    .fitness as any;
-
-  // Add training service to server
-  server.addService(
-    servicesProto.TrainingService.service,
-    trainingHandler as any
+  return (
+    <Stack.Navigator
+      initialRouteName={isAuthenticated ? 'Home' : 'Login'}
+      screenOptions={{
+        headerShown: true,
+        headerStyle: {
+          backgroundColor: '#3B82F6',
+        },
+        headerTintColor: '#fff',
+        headerTitleStyle: {
+          fontWeight: 'bold',
+        },
+      }}>
+      {isAuthenticated ? (
+        // Authenticated user screens
+        <>
+          <Stack.Screen
+            name='Home'
+            component={HomeScreen}
+            options={{ title: 'Fitness AI' }}
+          />
+          <Stack.Screen
+            name='Profile'
+            component={ProfileScreen}
+            options={{ title: 'Your Profile' }}
+          />
+          <Stack.Screen
+            name='GeneratePlan'
+            component={GeneratePlanScreen}
+            options={{ title: 'Create Training Plan' }}
+          />
+          <Stack.Screen
+            name='PlanSummary'
+            component={PlanSummaryScreen}
+            options={{ title: 'Training Plan' }}
+          />
+        </>
+      ) : (
+        // Authentication screens
+        <>
+          <Stack.Screen
+            name='Login'
+            component={LoginScreen}
+            options={{
+              title: 'Sign In',
+              headerShown: false,
+            }}
+          />
+          <Stack.Screen
+            name='Register'
+            component={RegisterScreen}
+            options={{
+              title: 'Create Account',
+              headerShown: false,
+            }}
+          />
+        </>
+      )}
+    </Stack.Navigator>
   );
-
-  // AI service implementation
-  const aiPackageDefinition = protoLoader.loadSync(aiProtoPath, {
-    keepCase: true,
-    longs: String,
-    enums: String,
-    defaults: true,
-    oneofs: true,
-  });
-
-  const aiProto = grpc.loadPackageDefinition(aiPackageDefinition).ai as any;
-
-  // Create OpenAI client
-  const openaiClient = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY,
-  });
-
-  // Pass both Prisma and OpenAI clients to the AI handler
-  const aiServiceHandler = aiHandler({
-    prisma,
-    openai: openaiClient,
-    log: console,
-  });
-
-  // Convertir el manejador a tipo 'any' para evitar problemas de tipado
-  server.addService(aiProto.AIService.service, aiServiceHandler as any);
-
-  return server;
 }
 
-/**
- * Start the gRPC server on the specified port
- */
-export function startGrpcServer(
-  server: grpc.Server,
-  port: number
-): Promise<void> {
-  return new Promise((resolve, reject) => {
-    server.bindAsync(
-      `0.0.0.0:${port}`,
-      grpc.ServerCredentials.createInsecure(),
-      (err, actualPort) => {
-        if (err) {
-          reject(err);
-          return;
-        }
+export default Navigation;
+</file>
 
-        server.start();
-        console.log(`gRPC server started on port ${actualPort}`);
-        resolve();
+<file path="mobile/src/services/grpcClient.ts">
+import { grpc } from '@improbable-eng/grpc-web';
+import Config from 'react-native-config';
+
+// Define service endpoints
+const GRPC_ENDPOINT = Config.GRPC_ENDPOINT || 'http://localhost:8080';
+
+// Types from our proto file
+export interface UserProfile {
+  id: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+}
+
+export interface ProfileData {
+  age?: number;
+  weight?: number;
+  height?: number;
+  fitnessLevel?: string;
+  fitnessGoals?: string[];
+  medicalIssues?: string[];
+  availableEquipment?: string[];
+  trainingPreferences?: string;
+}
+
+export interface UserProfileResponse {
+  id: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  profile?: ProfileData;
+}
+
+export interface TrainingPlanResponse {
+  id: string;
+  userId: string;
+  name: string;
+  description: string;
+  createdAt: string;
+  updatedAt: string;
+  isActive: boolean;
+  generatedBy: string;
+  exercises: ExerciseData[];
+}
+
+export interface ExerciseData {
+  id: string;
+  name: string;
+  description: string;
+  sets: number;
+  reps: string;
+  restTime: number;
+  notes: string;
+  dayOfWeek: number;
+  order: number;
+}
+
+export interface LoginRequest {
+  email: string;
+  password: string;
+}
+
+export interface CreateUserRequest {
+  email: string;
+  password: string;
+  firstName: string;
+  lastName: string;
+  profileData?: ProfileData;
+}
+
+export interface AuthResponse {
+  token: string;
+  user: UserProfile;
+}
+
+export interface TrainingPlanRequest {
+  userId: string;
+  name: string;
+  description: string;
+  daysPerWeek: number;
+  focusArea: string;
+  sessionDuration: number;
+  includeWarmup: boolean;
+  includeCooldown: boolean;
+}
+
+// User service interfaces
+interface UserService {
+  authenticateUser: (request: LoginRequest) => Promise<AuthResponse>;
+  createUserProfile: (
+    request: CreateUserRequest
+  ) => Promise<UserProfileResponse>;
+  getUserProfile: (userId: string) => Promise<UserProfileResponse>;
+}
+
+// Training service interfaces
+interface TrainingService {
+  generateTrainingPlan: (
+    request: TrainingPlanRequest
+  ) => Promise<TrainingPlanResponse>;
+}
+
+// Simplified GrpcClient class
+class GrpcClient {
+  private endpoint: string;
+  private authToken: string | null = null;
+  public userService: UserService;
+  public trainingService: TrainingService;
+
+  constructor(endpoint: string) {
+    this.endpoint = endpoint;
+
+    // Initialize the user service with methods that interact with the gRPC backend
+    this.userService = {
+      authenticateUser: this.authenticateUser.bind(this),
+      createUserProfile: this.createUserProfile.bind(this),
+      getUserProfile: this.getUserProfile.bind(this),
+    };
+
+    // Initialize the training service
+    this.trainingService = {
+      generateTrainingPlan: this.generateTrainingPlan.bind(this),
+    };
+  }
+
+  setAuthToken(token: string): void {
+    this.authToken = token;
+  }
+
+  clearAuthToken(): void {
+    this.authToken = null;
+  }
+
+  // Authentication method
+  private async authenticateUser(request: LoginRequest): Promise<AuthResponse> {
+    try {
+      // This would be a real gRPC call in production
+      // For development, we're using a mock implementation
+      console.log('Authenticating user:', request.email);
+
+      // Simulating network delay
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      // Mock successful response
+      return {
+        token: 'mock-jwt-token',
+        user: {
+          id: '1',
+          email: request.email,
+          firstName: 'John',
+          lastName: 'Doe',
+        },
+      };
+    } catch (error) {
+      console.error('Authentication error:', error);
+      throw new Error('Authentication failed');
+    }
+  }
+
+  // User registration method
+  private async createUserProfile(
+    request: CreateUserRequest
+  ): Promise<UserProfileResponse> {
+    try {
+      // This would be a real gRPC call in production
+      console.log('Creating user profile for:', request.email);
+
+      // Simulating network delay
+      await new Promise((resolve) => setTimeout(resolve, 700));
+
+      // Mock successful response
+      return {
+        id: '1',
+        email: request.email,
+        firstName: request.firstName,
+        lastName: request.lastName,
+        profile: request.profileData,
+      };
+    } catch (error) {
+      console.error('User registration error:', error);
+      throw new Error('User registration failed');
+    }
+  }
+
+  // Get user profile method
+  private async getUserProfile(userId: string): Promise<UserProfileResponse> {
+    try {
+      // This would be a real gRPC call in production
+      console.log('Getting user profile for ID:', userId);
+
+      // Check if we have an auth token
+      if (!this.authToken) {
+        throw new Error('Authentication required');
       }
-    );
-  });
+
+      // Simulating network delay
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      // Mock successful response
+      return {
+        id: userId,
+        email: 'user@example.com',
+        firstName: 'John',
+        lastName: 'Doe',
+        profile: {
+          age: 30,
+          weight: 75,
+          height: 180,
+          fitnessLevel: 'Intermediate',
+          fitnessGoals: ['Build muscle', 'Improve endurance'],
+          medicalIssues: [],
+          availableEquipment: ['Dumbbells', 'Bench', 'Pull-up bar'],
+          trainingPreferences: JSON.stringify({
+            preferredDays: [1, 3, 5],
+            maxSessionDuration: 60,
+          }),
+        },
+      };
+    } catch (error) {
+      console.error('Get profile error:', error);
+      throw new Error('Failed to get user profile');
+    }
+  }
+
+  // Generate training plan method
+  private async generateTrainingPlan(
+    request: TrainingPlanRequest
+  ): Promise<TrainingPlanResponse> {
+    try {
+      // This would be a real gRPC call in production
+      console.log('Generating training plan for user:', request.userId);
+
+      // Check if we have an auth token
+      if (!this.authToken) {
+        throw new Error('Authentication required');
+      }
+
+      // Simulating network delay
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+
+      // Mock successful response
+      return {
+        id: '123456',
+        userId: request.userId,
+        name: request.name,
+        description: request.description,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        isActive: true,
+        generatedBy: 'AI',
+        exercises: [
+          {
+            id: 'ex1',
+            name: 'Push-up',
+            description:
+              'Standard push-up working chest, shoulders, and triceps',
+            sets: 3,
+            reps: '12-15',
+            restTime: 60,
+            notes: 'Focus on proper form',
+            dayOfWeek: 1,
+            order: 1,
+          },
+          {
+            id: 'ex2',
+            name: 'Squats',
+            description: 'Bodyweight squats for lower body',
+            sets: 3,
+            reps: '15-20',
+            restTime: 60,
+            notes: 'Engage core for stability',
+            dayOfWeek: 1,
+            order: 2,
+          },
+          {
+            id: 'ex3',
+            name: 'Plank',
+            description: 'Core stabilization exercise',
+            sets: 3,
+            reps: '30-45 seconds',
+            restTime: 45,
+            notes: 'Keep body straight',
+            dayOfWeek: 1,
+            order: 3,
+          },
+        ],
+      };
+    } catch (error) {
+      console.error('Generate training plan error:', error);
+      throw new Error('Failed to generate training plan');
+    }
+  }
 }
 
-/**
- * Initialize and start the gRPC server with all services
- */
-export async function setupGrpcServer(
-  prisma: PrismaClient
-): Promise<grpc.Server> {
-  const server = initGrpcServer({
-    prisma,
-    jwtSecret: config.jwt.secret,
-    tokenExpiryTime: parseInt(config.jwt.expiresIn, 10),
-  });
+// Create and export a singleton instance
+const grpcClient = new GrpcClient(GRPC_ENDPOINT);
+export default grpcClient;
+</file>
 
-  await startGrpcServer(server, config.grpc.port);
+<file path="proto/services.proto">
+syntax = "proto3";
 
-  return server;
+package fitness;
+
+// User service for account management
+service UserService {
+  rpc GetUserProfile(UserIdRequest) returns (UserProfileResponse);
+  rpc CreateUserProfile(CreateUserRequest) returns (UserProfileResponse);
+  rpc UpdateUserProfile(UpdateUserRequest) returns (UserProfileResponse);
+  rpc AuthenticateUser(LoginRequest) returns (AuthResponse);
+}
+
+// Training service for workout plans
+service TrainingService {
+  rpc GetTrainingPlan(TrainingIdRequest) returns (TrainingPlanResponse);
+  rpc GenerateTrainingPlan(TrainingPlanRequest) returns (TrainingPlanResponse);
+  rpc UpdateTrainingPlan(UpdateTrainingRequest) returns (TrainingPlanResponse);
+  rpc ListUserTrainingPlans(UserIdRequest) returns (TrainingPlansListResponse);
+  rpc SubmitSessionFeedback(SubmitSessionFeedbackRequest) returns (SubmitSessionFeedbackResponse);
+  rpc GenerateProgressionSuggestions(ProgressionSuggestionsRequest) returns (ProgressionSuggestionsResponse);
+}
+
+// User related messages
+message UserIdRequest {
+  string userId = 1;
+}
+
+message CreateUserRequest {
+  string email = 1;
+  string password = 2;
+  string firstName = 3;
+  string lastName = 4;
+  ProfileData profileData = 5;
+}
+
+message UpdateUserRequest {
+  string userId = 1;
+  string firstName = 2;
+  string lastName = 3;
+  ProfileData profileData = 4;
+}
+
+message LoginRequest {
+  string email = 1;
+  string password = 2;
+}
+
+message AuthResponse {
+  string token = 1;
+  UserProfile user = 2;
+}
+
+message UserProfileResponse {
+  string id = 1;
+  string email = 2;
+  string firstName = 3;
+  string lastName = 4;
+  ProfileData profile = 5;
+}
+
+message ProfileData {
+  int32 age = 1;
+  float weight = 2;
+  float height = 3;
+  string fitnessLevel = 4;
+  repeated string fitnessGoals = 5;
+  repeated string medicalIssues = 6;
+  repeated string availableEquipment = 7;
+  string trainingPreferences = 8; // JSON string
+}
+
+message UserProfile {
+  string id = 1;
+  string email = 2;
+  string firstName = 3;
+  string lastName = 4;
+}
+
+// Training related messages
+message TrainingIdRequest {
+  string trainingId = 1;
+}
+
+message TrainingPlanRequest {
+  string userId = 1;
+  string name = 2;
+  string description = 3;
+  int32 daysPerWeek = 4;
+  string focusArea = 5;
+  int32 sessionDuration = 6;
+  bool includeWarmup = 7;
+  bool includeCooldown = 8;
+}
+
+message UpdateTrainingRequest {
+  string trainingId = 1;
+  string name = 2;
+  string description = 3;
+  bool isActive = 4;
+  repeated ExerciseData exercises = 5;
+}
+
+message TrainingPlanResponse {
+  string id = 1;
+  string userId = 2;
+  string name = 3;
+  string description = 4;
+  string createdAt = 5;
+  string updatedAt = 6;
+  bool isActive = 7;
+  string generatedBy = 8;
+  repeated ExerciseData exercises = 9;
+}
+
+message TrainingPlansListResponse {
+  repeated TrainingPlanResponse trainings = 1;
+}
+
+message ExerciseData {
+  string id = 1;
+  string name = 2;
+  string description = 3;
+  int32 sets = 4;
+  string reps = 5;
+  int32 restTime = 6;
+  string notes = 7;
+  int32 dayOfWeek = 8;
+  int32 order = 9;
+}
+
+// Session feedback related messages
+message ExerciseFeedback {
+  string exercise_name = 1;
+  string reps = 2;
+  float weight = 3;
+  int32 rir = 4;
+  string notes = 5;
+}
+
+message SubmitSessionFeedbackRequest {
+  string user_id = 1;
+  string session_id = 2;
+  repeated ExerciseFeedback exercises_feedback = 3;
+}
+
+message SubmitSessionFeedbackResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// Progression suggestions related messages
+message ProgressionSuggestionsRequest {
+  string user_id = 1;
+  string training_plan_id = 2;
+  int32 history_weeks = 3; // Number of weeks of history to analyze (2-4 typically)
+}
+
+message ExerciseModificationSuggestion {
+  string exercise_id = 1;
+  string suggestion = 2;
+  float new_weight = 3;
+  string replace_with = 4;
+}
+
+message ProgressionSuggestionsResponse {
+  string training_plan_id = 1;
+  bool deload_recommended = 2;
+  string summary = 3;
+  repeated ExerciseModificationSuggestion modified_exercises = 4;
+  string generated_at = 5;
+  string model_used = 6;
 }
 </file>
 
@@ -20813,6 +22031,871 @@ model ExerciseLog {
 
   @@index([trainingSessionId])
   @@index([userId])
+}
+</file>
+
+<file path="server/src/domain/grpc/training/trainingHandler.ts">
+import { PrismaClient } from '../../../../generated/prisma';
+import { UntypedHandleCall } from '@grpc/grpc-js';
+import { ServerUnaryCall, sendUnaryData } from '@grpc/grpc-js';
+
+// Types that would normally be imported from the generated proto files
+// These are placeholders until the actual generated types are available
+interface GeneratePlanRequest {
+  user_id: string;
+  plan_name?: string;
+  description?: string;
+}
+
+interface TrainingPlanResponse {
+  training_plan: TrainingPlan;
+}
+
+interface TrainingPlan {
+  id: string;
+  user_id: string;
+  name: string;
+  description?: string;
+  created_at: string;
+  updated_at: string;
+  is_active: boolean;
+  generated_by: string;
+  exercises: Exercise[];
+}
+
+interface Exercise {
+  id: string;
+  name: string;
+  description?: string;
+  sets: number;
+  reps: string;
+  rest_time?: number;
+  notes?: string;
+  day_of_week: number;
+  order: number;
+}
+
+interface WorkoutRecordRequest {
+  user_id: string;
+  training_id: string;
+  day_of_week: number;
+  exercise_records: ExerciseRecord[];
+  workout_date: string;
+  notes?: string;
+}
+
+interface ExerciseRecord {
+  exercise_id?: string;
+  exercise_name: string;
+  completed_sets: number;
+  completed_reps: string[];
+  weight?: number;
+  notes?: string;
+}
+
+interface WorkoutRecordResponse {
+  record_id: string;
+  user_id: string;
+  training_id: string;
+  workout_date: string;
+  exercise_records: ExerciseRecord[];
+  notes?: string;
+}
+
+// Interface for Exercise Feedback
+interface ExerciseFeedbackInput {
+  exercise_name: string;
+  reps: string;
+  weight: number;
+  rir: number;
+  notes?: string;
+}
+
+// Interface for Session Feedback Request
+interface SubmitSessionFeedbackRequest {
+  user_id: string;
+  session_id: string;
+  exercises_feedback: ExerciseFeedbackInput[];
+}
+
+// Interface for Session Feedback Response
+interface SubmitSessionFeedbackResponse {
+  success: boolean;
+  message: string;
+}
+
+// Interface for Progression Suggestions Request
+interface ProgressionSuggestionsRequest {
+  user_id: string;
+  training_plan_id: string;
+  history_weeks: number;
+}
+
+// Interface for Exercise Modification Suggestion
+interface ExerciseModificationSuggestion {
+  exercise_id: string;
+  suggestion: string;
+  new_weight?: number;
+  replace_with?: string;
+}
+
+// Interface for Progression Suggestions Response
+interface ProgressionSuggestionsResponse {
+  training_plan_id: string;
+  deload_recommended: boolean;
+  summary: string;
+  modified_exercises: ExerciseModificationSuggestion[];
+  generated_at: string;
+  model_used: string;
+}
+
+const prisma = new PrismaClient();
+
+export interface TrainingHandler {
+  GenerateTrainingPlan: UntypedHandleCall;
+  RecordWorkout: UntypedHandleCall;
+  SubmitSessionFeedback: UntypedHandleCall;
+  GenerateProgressionSuggestions: UntypedHandleCall;
+}
+
+/**
+ * Handler for the gRPC TrainingService
+ */
+export const trainingHandler: TrainingHandler = {
+  /**
+   * Generate a training plan for a user
+   */
+  GenerateTrainingPlan: async (
+    call: ServerUnaryCall<GeneratePlanRequest, TrainingPlanResponse>,
+    callback: sendUnaryData<TrainingPlanResponse>
+  ) => {
+    try {
+      const { user_id, plan_name, description } = call.request;
+
+      // Check if user exists
+      const user = await prisma.user.findUnique({
+        where: { id: user_id },
+      });
+
+      if (!user) {
+        return callback({
+          code: 5, // NOT_FOUND
+          message: 'User not found',
+        });
+      }
+
+      // Create a new training plan
+      const trainingPlan = await prisma.trainingPlan.create({
+        data: {
+          userId: user_id,
+          name: plan_name || 'Custom Training Plan',
+          description: description || 'Generated training plan',
+          generatedBy: 'gpt-4', // Default AI model
+        },
+      });
+
+      // Here you would typically call an AI service to generate the actual plan
+      // For now, we'll just create some placeholder training sessions for the week
+      const weekdays = [1, 2, 3, 4, 5, 6, 7]; // 1-7 for Monday-Sunday
+      const trainingSessions = await Promise.all(
+        weekdays.map(async (day) => {
+          return prisma.trainingSession.create({
+            data: {
+              trainingPlanId: trainingPlan.id,
+              userId: user_id,
+              dayOfWeek: day,
+              feedback: null,
+              completed: false,
+            },
+          });
+        })
+      );
+
+      // Format the response
+      const response: TrainingPlanResponse = {
+        training_plan: {
+          id: trainingPlan.id,
+          user_id: trainingPlan.userId,
+          name: trainingPlan.name,
+          description: trainingPlan.description || undefined,
+          created_at: trainingPlan.createdAt.toISOString(),
+          updated_at: trainingPlan.updatedAt.toISOString(),
+          is_active: trainingPlan.isActive,
+          generated_by: trainingPlan.generatedBy,
+          exercises: [], // No exercises yet, these would be added by the AI service
+        },
+      };
+
+      callback(null, response);
+    } catch (error) {
+      console.error('Error in GenerateTrainingPlan:', error);
+      callback({
+        code: 13, // INTERNAL
+        message: 'An internal error occurred',
+      });
+    }
+  },
+
+  /**
+   * Record a workout session
+   */
+  RecordWorkout: async (
+    call: ServerUnaryCall<WorkoutRecordRequest, WorkoutRecordResponse>,
+    callback: sendUnaryData<WorkoutRecordResponse>
+  ) => {
+    try {
+      const {
+        user_id,
+        training_id,
+        day_of_week,
+        exercise_records,
+        workout_date,
+        notes,
+      } = call.request;
+
+      // Check if user and training plan exist
+      const user = await prisma.user.findUnique({
+        where: { id: user_id },
+      });
+
+      if (!user) {
+        return callback({
+          code: 5, // NOT_FOUND
+          message: 'User not found',
+        });
+      }
+
+      const trainingPlan = await prisma.trainingPlan.findUnique({
+        where: { id: training_id },
+      });
+
+      if (!trainingPlan) {
+        return callback({
+          code: 5, // NOT_FOUND
+          message: 'Training plan not found',
+        });
+      }
+
+      // Find or create the training session for this day
+      let trainingSession = await prisma.trainingSession.findFirst({
+        where: {
+          trainingPlanId: training_id,
+          userId: user_id,
+          dayOfWeek: day_of_week,
+        },
+      });
+
+      if (!trainingSession) {
+        trainingSession = await prisma.trainingSession.create({
+          data: {
+            trainingPlanId: training_id,
+            userId: user_id,
+            dayOfWeek: day_of_week,
+            feedback: notes || null,
+            completed: true,
+            completedDate: new Date(workout_date),
+          },
+        });
+      } else {
+        // Update the existing session
+        trainingSession = await prisma.trainingSession.update({
+          where: { id: trainingSession.id },
+          data: {
+            feedback: notes || trainingSession.feedback,
+            completed: true,
+            completedDate: new Date(workout_date),
+          },
+        });
+      }
+
+      // Create exercise logs
+      const exerciseLogs = await Promise.all(
+        exercise_records.map(async (record: ExerciseRecord) => {
+          return prisma.exerciseLog.create({
+            data: {
+              trainingSessionId: trainingSession!.id,
+              userId: user_id,
+              exerciseName: record.exercise_name,
+              sets: record.completed_sets,
+              reps: record.completed_reps.join(', '), // Join array into string
+              weight: record.weight,
+              feedback: record.notes || null,
+            },
+          });
+        })
+      );
+
+      // Format the response
+      const response: WorkoutRecordResponse = {
+        record_id: trainingSession.id,
+        user_id: user_id,
+        training_id: training_id,
+        workout_date: workout_date,
+        exercise_records: exercise_records,
+        notes: notes || undefined,
+      };
+
+      callback(null, response);
+    } catch (error) {
+      console.error('Error in RecordWorkout:', error);
+      callback({
+        code: 13, // INTERNAL
+        message: 'An internal error occurred',
+      });
+    }
+  },
+
+  /**
+   * Submit feedback for a completed training session
+   */
+  SubmitSessionFeedback: async (
+    call: ServerUnaryCall<
+      SubmitSessionFeedbackRequest,
+      SubmitSessionFeedbackResponse
+    >,
+    callback: sendUnaryData<SubmitSessionFeedbackResponse>
+  ) => {
+    try {
+      const { user_id, session_id, exercises_feedback } = call.request;
+
+      // Validate that session exists and belongs to the user
+      const trainingSession = await prisma.trainingSession.findFirst({
+        where: {
+          id: session_id,
+          userId: user_id,
+        },
+      });
+
+      if (!trainingSession) {
+        return callback({
+          code: 5, // NOT_FOUND
+          message: 'Training session not found or does not belong to this user',
+        });
+      }
+
+      // Process each exercise feedback
+      const updatePromises = exercises_feedback.map(async (feedback) => {
+        // Find the exercise log by session and exercise name
+        const exerciseLog = await prisma.exerciseLog.findFirst({
+          where: {
+            trainingSessionId: session_id,
+            userId: user_id,
+            exerciseName: feedback.exercise_name,
+          },
+        });
+
+        if (!exerciseLog) {
+          console.error(
+            `Exercise log not found for ${feedback.exercise_name} in session ${session_id}`
+          );
+          return null;
+        }
+
+        // Update the exercise log with feedback data
+        return prisma.exerciseLog.update({
+          where: { id: exerciseLog.id },
+          data: {
+            reps: feedback.reps,
+            weight: feedback.weight,
+            rir: feedback.rir,
+            feedback: feedback.notes || exerciseLog.feedback,
+          },
+        });
+      });
+
+      // Wait for all updates to complete
+      const results = await Promise.all(updatePromises);
+
+      // Count successful updates
+      const successfulUpdates = results.filter(Boolean).length;
+
+      // Mark the session as completed if it wasn't already
+      if (!trainingSession.completed) {
+        await prisma.trainingSession.update({
+          where: { id: session_id },
+          data: {
+            completed: true,
+            completedDate: new Date(),
+          },
+        });
+      }
+
+      // Prepare the response
+      const response: SubmitSessionFeedbackResponse = {
+        success: successfulUpdates > 0,
+        message:
+          successfulUpdates > 0
+            ? `Successfully updated ${successfulUpdates} exercise logs`
+            : 'No exercise logs were updated',
+      };
+
+      callback(null, response);
+    } catch (error) {
+      console.error('Error in SubmitSessionFeedback:', error);
+      callback({
+        code: 13, // INTERNAL
+        message: 'An internal error occurred',
+      });
+    }
+  },
+
+  /**
+   * Generate progression suggestions based on user's exercise history
+   */
+  GenerateProgressionSuggestions: async (
+    call: ServerUnaryCall<
+      ProgressionSuggestionsRequest,
+      ProgressionSuggestionsResponse
+    >,
+    callback: sendUnaryData<ProgressionSuggestionsResponse>
+  ) => {
+    try {
+      const { user_id, training_plan_id, history_weeks } = call.request;
+
+      // Check if user and training plan exist
+      const user = await prisma.user.findUnique({
+        where: { id: user_id },
+      });
+
+      if (!user) {
+        return callback({
+          code: 5, // NOT_FOUND
+          message: 'User not found',
+        });
+      }
+
+      const trainingPlan = await prisma.trainingPlan.findUnique({
+        where: { id: training_plan_id },
+        include: {
+          trainingSessions: {
+            include: {
+              exerciseLogs: true,
+            },
+          },
+        },
+      });
+
+      if (!trainingPlan) {
+        return callback({
+          code: 5, // NOT_FOUND
+          message: 'Training plan not found',
+        });
+      }
+
+      // Calculate date range for the history analysis
+      const endDate = new Date();
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - history_weeks * 7);
+
+      // Get exercise logs for the specified period
+      const exerciseLogs = await prisma.exerciseLog.findMany({
+        where: {
+          userId: user_id,
+          trainingSession: {
+            trainingPlanId: training_plan_id,
+          },
+          createdAt: {
+            gte: startDate,
+            lte: endDate,
+          },
+        },
+        orderBy: {
+          createdAt: 'asc',
+        },
+      });
+
+      // Get user profile for additional context
+      const userProfile = await prisma.profile.findUnique({
+        where: { userId: user_id },
+      });
+
+      // Group logs by exercise
+      const exerciseHistoryMap = new Map();
+
+      exerciseLogs.forEach((log) => {
+        if (!exerciseHistoryMap.has(log.exerciseName)) {
+          exerciseHistoryMap.set(log.exerciseName, []);
+        }
+        exerciseHistoryMap.get(log.exerciseName).push({
+          date: log.createdAt,
+          sets: log.sets,
+          reps: log.reps,
+          weight: log.weight,
+          rir: log.rir,
+          feedback: log.feedback,
+        });
+      });
+
+      // Convert map to array for prompt construction
+      const exerciseHistoryArray = Array.from(exerciseHistoryMap.entries()).map(
+        ([name, logs]) => ({
+          exercise_name: name,
+          history: logs,
+        })
+      );
+
+      // Construct a prompt for OpenAI to analyze the exercise history
+      const prompt = constructProgressionPrompt({
+        userId: user_id,
+        trainingPlanId: training_plan_id,
+        userProfile,
+        exerciseHistory: exerciseHistoryArray,
+        trainingPlan,
+      });
+
+      // Import OpenAI here to avoid circular dependencies
+      const OpenAI = require('openai');
+      const openai = new OpenAI({
+        apiKey: process.env.OPENAI_API_KEY,
+      });
+
+      // Call OpenAI API
+      const completion = await openai.chat.completions.create({
+        model: 'gpt-4-turbo',
+        messages: [
+          {
+            role: 'system',
+            content:
+              "You are a professional strength coach and exercise physiologist. Analyze the user's exercise history and provide specific progression suggestions.",
+          },
+          {
+            role: 'user',
+            content: prompt,
+          },
+        ],
+        response_format: { type: 'json_object' },
+        temperature: 0.2,
+      });
+
+      // Parse the response
+      const aiResponse = parseAIResponse(
+        completion.choices[0]?.message?.content || '{}'
+      );
+
+      // Format the response
+      const response: ProgressionSuggestionsResponse = {
+        training_plan_id: training_plan_id,
+        deload_recommended: aiResponse.deload_recommended || false,
+        summary:
+          aiResponse.summary ||
+          'No specific recommendations at this time. Continue with your current plan.',
+        modified_exercises:
+          aiResponse.exercise_modifications?.map((modification) => ({
+            exercise_id: modification.exercise_id,
+            suggestion: modification.suggestion,
+            new_weight: modification.new_weight,
+            replace_with: modification.replace_with,
+          })) || [],
+        generated_at: new Date().toISOString(),
+        model_used: 'gpt-4-turbo',
+      };
+
+      callback(null, response);
+    } catch (error) {
+      console.error('Error in GenerateProgressionSuggestions:', error);
+      callback({
+        code: 13, // INTERNAL
+        message: 'An internal error occurred',
+        details: error instanceof Error ? error.message : String(error),
+      });
+    }
+  },
+};
+
+/**
+ * Construct the prompt for OpenAI to analyze exercise history and suggest progressions
+ */
+function constructProgressionPrompt(data: {
+  userId: string;
+  trainingPlanId: string;
+  userProfile: any;
+  exerciseHistory: Array<{
+    exercise_name: string;
+    history: Array<{
+      date: Date;
+      sets: number;
+      reps: string;
+      weight?: number | null;
+      rir?: number | null;
+      feedback?: string | null;
+    }>;
+  }>;
+  trainingPlan: any;
+}): string {
+  const { userId, trainingPlanId, userProfile, exerciseHistory, trainingPlan } =
+    data;
+
+  // Format the exercise history for readability
+  const formattedExerciseHistory = exerciseHistory.map((exercise) => {
+    const historyEntries = exercise.history.map((entry) => {
+      return {
+        date: entry.date.toISOString().split('T')[0],
+        sets: entry.sets,
+        reps: entry.reps,
+        weight: entry.weight || 'bodyweight',
+        rir: entry.rir !== null ? entry.rir : 'not recorded',
+        feedback: entry.feedback || 'no feedback',
+      };
+    });
+
+    return {
+      exercise_name: exercise.exercise_name,
+      history: historyEntries,
+    };
+  });
+
+  // Create a structured prompt
+  return `
+# Exercise Progression Analysis
+
+## User Information
+- User ID: ${userId}
+- Training Plan ID: ${trainingPlanId}
+- Fitness Level: ${userProfile?.fitnessLevel || 'Unknown'}
+- Fitness Goals: ${JSON.stringify(userProfile?.fitnessGoals || [])}
+- Medical Issues: ${JSON.stringify(userProfile?.medicalIssues || [])}
+
+## Training Plan Information
+- Name: ${trainingPlan.name}
+- Description: ${trainingPlan.description || 'No description'}
+- Created: ${trainingPlan.createdAt.toISOString().split('T')[0]}
+- Is Active: ${trainingPlan.isActive}
+
+## Exercise History (Last ${
+    formattedExerciseHistory[0]?.history.length || 0
+  } Sessions)
+${JSON.stringify(formattedExerciseHistory, null, 2)}
+
+## Analysis Request
+Based on the exercise history provided:
+
+1. Analyze each exercise's progression pattern.
+2. Identify signs of plateaus, fatigue, or untapped potential.
+3. Suggest specific modifications for each exercise that needs changes.
+4. If appropriate, recommend deload for the entire routine or specific exercises.
+5. Provide an overall summary of recommended changes.
+
+Please return your analysis in the following JSON format:
+{
+  "deload_recommended": boolean,
+  "summary": "Overall summary of the analysis and recommendations",
+  "exercise_modifications": [
+    {
+      "exercise_id": "exercise_name (as identifier)",
+      "suggestion": "Detailed explanation of what to change",
+      "new_weight": optional_new_weight_recommendation_numeric,
+      "replace_with": "optional_replacement_exercise"
+    }
+  ]
+}
+`;
+}
+
+/**
+ * Parse the AI response to extract progression suggestions
+ */
+function parseAIResponse(response: string): {
+  deload_recommended?: boolean;
+  summary?: string;
+  exercise_modifications?: Array<{
+    exercise_id: string;
+    suggestion: string;
+    new_weight?: number;
+    replace_with?: string;
+  }>;
+} {
+  try {
+    // Parse the JSON response
+    const parsedResponse = JSON.parse(response);
+
+    // Basic validation
+    if (typeof parsedResponse !== 'object') {
+      console.error('Invalid response format: not an object');
+      return createFallbackResponse();
+    }
+
+    // Return the parsed response
+    return {
+      deload_recommended: !!parsedResponse.deload_recommended,
+      summary:
+        parsedResponse.summary || 'No specific recommendations at this time.',
+      exercise_modifications: Array.isArray(
+        parsedResponse.exercise_modifications
+      )
+        ? parsedResponse.exercise_modifications
+        : [],
+    };
+  } catch (error) {
+    console.error('Error parsing AI response:', error);
+    return createFallbackResponse();
+  }
+}
+
+/**
+ * Create a fallback response for when AI parsing fails
+ */
+function createFallbackResponse() {
+  return {
+    deload_recommended: false,
+    summary:
+      'Unable to generate specific recommendations at this time. Please continue with your current plan and consult with a fitness professional if needed.',
+    exercise_modifications: [],
+  };
+}
+
+// Export the training handler
+export default trainingHandler;
+</file>
+
+<file path="server/src/services/grpc.ts">
+import * as grpc from '@grpc/grpc-js';
+import * as protoLoader from '@grpc/proto-loader';
+import path from 'path';
+import { PrismaClient } from '../../generated/prisma';
+import { config } from '../config/index';
+import OpenAI from 'openai';
+
+// Import domain handlers
+import createUserServiceHandler from '../domain/grpc/user/userHandler';
+import { aiHandler } from '../domain/grpc/ai/aiHandler';
+import trainingHandler from '../domain/grpc/training/trainingHandler';
+// Other domain handlers will be imported similarly as they're implemented
+// import createTrainingServiceHandler from '../domain/grpc/training/trainingHandler';
+
+interface GrpcServiceDependencies {
+  prisma: PrismaClient;
+  jwtSecret: string;
+  tokenExpiryTime: number;
+}
+
+/**
+ * Initialize gRPC server with all services
+ */
+export function initGrpcServer({
+  prisma,
+  jwtSecret,
+  tokenExpiryTime,
+}: GrpcServiceDependencies) {
+  const server = new grpc.Server();
+
+  // Define the proto file paths
+  const PROTO_DIR = path.join(__dirname, '../../../proto');
+
+  // Load individual service proto files
+  const userProtoPath = path.join(PROTO_DIR, 'user/user.proto');
+  const trainingProtoPath = path.join(PROTO_DIR, 'training/training.proto');
+  const aiProtoPath = path.join(PROTO_DIR, 'ai/ai.proto');
+  const servicesProtoPath = path.join(PROTO_DIR, 'services.proto');
+
+  // Load the user service
+  const userPackageDefinition = protoLoader.loadSync(userProtoPath, {
+    keepCase: true,
+    longs: String,
+    enums: String,
+    defaults: true,
+    oneofs: true,
+  });
+
+  const userProto = grpc.loadPackageDefinition(userPackageDefinition)
+    .user as any;
+
+  // Create user service handler with dependencies
+  const userHandler = createUserServiceHandler({
+    prisma,
+    jwtSecret,
+    tokenExpiryTime,
+  });
+
+  // Add user service to server
+  server.addService(userProto.UserService.service, userHandler);
+
+  // Load the services proto which includes the TrainingService
+  const servicesPackageDefinition = protoLoader.loadSync(servicesProtoPath, {
+    keepCase: true,
+    longs: String,
+    enums: String,
+    defaults: true,
+    oneofs: true,
+  });
+
+  const servicesProto = grpc.loadPackageDefinition(servicesPackageDefinition)
+    .fitness as any;
+
+  // Add training service to server
+  server.addService(
+    servicesProto.TrainingService.service,
+    trainingHandler as any
+  );
+
+  // AI service implementation
+  const aiPackageDefinition = protoLoader.loadSync(aiProtoPath, {
+    keepCase: true,
+    longs: String,
+    enums: String,
+    defaults: true,
+    oneofs: true,
+  });
+
+  const aiProto = grpc.loadPackageDefinition(aiPackageDefinition).ai as any;
+
+  // Create OpenAI client
+  const openaiClient = new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY,
+  });
+
+  // Pass both Prisma and OpenAI clients to the AI handler
+  const aiServiceHandler = aiHandler({
+    prisma,
+    openai: openaiClient,
+    log: console,
+  });
+
+  // Convertir el manejador a tipo 'any' para evitar problemas de tipado
+  server.addService(aiProto.AIService.service, aiServiceHandler as any);
+
+  return server;
+}
+
+/**
+ * Start the gRPC server on the specified port
+ */
+export function startGrpcServer(
+  server: grpc.Server,
+  port: number
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    server.bindAsync(
+      `0.0.0.0:${port}`,
+      grpc.ServerCredentials.createInsecure(),
+      (err, actualPort) => {
+        if (err) {
+          reject(err);
+          return;
+        }
+
+        server.start();
+        console.log(`gRPC server started on port ${actualPort}`);
+        resolve();
+      }
+    );
+  });
+}
+
+/**
+ * Initialize and start the gRPC server with all services
+ */
+export async function setupGrpcServer(
+  prisma: PrismaClient
+): Promise<grpc.Server> {
+  const server = initGrpcServer({
+    prisma,
+    jwtSecret: config.jwt.secret,
+    tokenExpiryTime: parseInt(config.jwt.expiresIn, 10),
+  });
+
+  await startGrpcServer(server, config.grpc.port);
+
+  return server;
 }
 </file>
 
