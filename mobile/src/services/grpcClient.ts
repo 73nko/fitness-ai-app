@@ -599,7 +599,6 @@ class GrpcClient {
   // Get today's training session
   private async getTodaySession(userId: string): Promise<TrainingPlanResponse> {
     try {
-      // This would be a real gRPC call in production
       console.log('Getting today session for user:', userId);
 
       // Check if we have an auth token
@@ -607,21 +606,29 @@ class GrpcClient {
         throw new Error('Authentication required');
       }
 
-      // Simulating network delay
-      await new Promise((resolve) => setTimeout(resolve, 700));
+      // Generate the full training plan
+      const fullPlan = await this.generateTrainingPlan({
+        userId: userId,
+        name: 'Auto Plan',
+        description: 'Plan generado automáticamente para filtrar sesión diaria',
+        daysPerWeek: 7,
+        focusArea: 'general',
+        sessionDuration: 60,
+        includeWarmup: true,
+        includeCooldown: true,
+      });
 
       // Get current day of week (0-6, where 0 is Sunday)
       const today = new Date().getDay();
 
-      // Mock successful response with exercises filtered for today
-      const mockPlan = this.generateMockTrainingPlan(userId);
-      const filteredExercises = mockPlan.exercises.filter(
+      // Filter exercises for today
+      const todayExercises = fullPlan.exercises.filter(
         (exercise) => exercise.dayOfWeek === today
       );
 
       return {
-        ...mockPlan,
-        exercises: filteredExercises,
+        ...fullPlan,
+        exercises: todayExercises,
       };
     } catch (error) {
       console.error('Get today session error:', error);
