@@ -3,9 +3,15 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import HomeScreen from '../screens/HomeScreen';
 import ProfileScreen from '../screens/ProfileScreen';
+import LoginScreen from '../screens/LoginScreen';
+import RegisterScreen from '../screens/RegisterScreen';
 import { useAuth } from '../context/AuthContext';
 
 export type RootStackParamList = {
+  // Auth Screens
+  Login: undefined;
+  Register: undefined;
+  // App Screens
   Home: undefined;
   Profile: undefined;
 };
@@ -13,11 +19,16 @@ export type RootStackParamList = {
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 function Navigation() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, isLoading } = useAuth();
+
+  // If still checking auth status, could show a splash screen or loading indicator
+  if (isLoading) {
+    return null; // Or a loading spinner component
+  }
 
   return (
     <Stack.Navigator
-      initialRouteName='Home'
+      initialRouteName={isAuthenticated ? 'Home' : 'Login'}
       screenOptions={{
         headerShown: true,
         headerStyle: {
@@ -28,16 +39,41 @@ function Navigation() {
           fontWeight: 'bold',
         },
       }}>
-      <Stack.Screen
-        name='Home'
-        component={HomeScreen}
-        options={{ title: 'Fitness AI' }}
-      />
-      <Stack.Screen
-        name='Profile'
-        component={ProfileScreen}
-        options={{ title: 'Your Profile' }}
-      />
+      {isAuthenticated ? (
+        // Authenticated user screens
+        <>
+          <Stack.Screen
+            name='Home'
+            component={HomeScreen}
+            options={{ title: 'Fitness AI' }}
+          />
+          <Stack.Screen
+            name='Profile'
+            component={ProfileScreen}
+            options={{ title: 'Your Profile' }}
+          />
+        </>
+      ) : (
+        // Authentication screens
+        <>
+          <Stack.Screen
+            name='Login'
+            component={LoginScreen}
+            options={{
+              title: 'Sign In',
+              headerShown: false,
+            }}
+          />
+          <Stack.Screen
+            name='Register'
+            component={RegisterScreen}
+            options={{
+              title: 'Create Account',
+              headerShown: false,
+            }}
+          />
+        </>
+      )}
     </Stack.Navigator>
   );
 }
