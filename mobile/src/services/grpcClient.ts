@@ -21,6 +21,10 @@ import {
   Exercise as ExerciseProto,
   SubmitSessionFeedbackRequest as SubmitSessionFeedbackRequestProto,
   SubmitSessionFeedbackResponse as SubmitSessionFeedbackResponseProto,
+  ProgressRequest,
+  ProgressResponse,
+  ExerciseProgress,
+  ProgressPoint,
 } from '../generated/training/training';
 
 // Define service endpoints
@@ -730,7 +734,6 @@ class GrpcClient {
     request: GetUserExerciseLogsRequest
   ): Promise<GetUserExerciseLogsResponse> {
     try {
-      // This would be a real gRPC call in production
       console.log('Getting exercise logs for user:', request.user_id);
 
       // Check if we have an auth token
@@ -738,92 +741,84 @@ class GrpcClient {
         throw new Error('Authentication required');
       }
 
-      // Simulating network delay
-      await new Promise((resolve) => setTimeout(resolve, 700));
+      // Calculate date range based on days parameter (if provided)
+      let startDate: string | undefined;
+      if (request.days) {
+        const start = new Date();
+        start.setDate(start.getDate() - request.days);
+        startDate = start.toISOString().split('T')[0]; // Format as YYYY-MM-DD
+      }
 
-      // Mock response data
-      return {
-        logs: this.generateMockExerciseLogs(
-          request.user_id,
-          request.exercise_name,
-          request.days || 30
-        ),
+      // Create the gRPC request message
+      const progressRequest = ProgressRequest.create({
+        userId: request.user_id,
+        startDate: startDate,
+      });
+
+      // Define the GetUserProgress method from the TrainingService
+      const progressMethod: GrpcMethodDefinition<any, any> = {
+        methodName: 'GetUserProgress',
+        service: { serviceName: TrainingServiceServiceName },
+        requestStream: false,
+        responseStream: false,
+        requestType: {
+          new: () => ProgressRequest.create({}),
+          encode: (message: any, writer?: any) =>
+            ProgressRequest.encode(message, writer),
+        } as any,
+        responseType: {
+          new: () => ProgressResponse.create({}),
+          decode: (reader: any, length?: number) =>
+            ProgressResponse.decode(reader, length),
+        } as any,
       };
+
+      // Make the gRPC call
+      const response = await callUnary<ProgressRequest, ProgressResponse>(
+        progressMethod,
+        progressRequest,
+        this.authToken
+      );
+
+      // Transform the ProgressResponse into the ExerciseLog format
+      const logs: ExerciseLog[] = [];
+
+      response.exerciseProgress.forEach((exercise: ExerciseProgress) => {
+        // Skip if we're filtering by exercise name and this isn't it
+        if (
+          request.exercise_name &&
+          exercise.exerciseName.toLowerCase() !==
+            request.exercise_name.toLowerCase()
+        ) {
+          return;
+        }
+
+        // Add each progress point as a log entry
+        exercise.progressPoints.forEach((point: ProgressPoint) => {
+          if (point.date) {
+            logs.push({
+              exercise_name: exercise.exerciseName,
+              reps: point.totalReps ? point.totalReps.toString() : '0',
+              weight: point.weight || 0,
+              rir: 0, // RIR not provided in progress data
+              feedback: '', // Feedback not provided in progress data
+              created_at: point.date,
+            });
+          }
+        });
+      });
+
+      // Sort by date, oldest first (for consistent visualization)
+      logs.sort(
+        (a, b) =>
+          new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      );
+
+      return { logs };
     } catch (error) {
       console.error('Get exercise logs error:', error);
       throw new Error('Failed to get exercise logs');
     }
-  }
-
-  private generateMockExerciseLogs(
-    userId: string,
-    exerciseName?: string,
-    days: number = 30
-  ): ExerciseLog[] {
-    // Get a list of exercise names
-    const exerciseNames = [
-      'Bench Press',
-      'Squat',
-      'Deadlift',
-      'Pull-up',
-      'Shoulder Press',
-    ];
-
-    // If a specific exercise is requested, filter to that one
-    const exercises = exerciseName ? [exerciseName] : exerciseNames;
-
-    const logs: ExerciseLog[] = [];
-
-    // Generate mock data for each exercise
-    exercises.forEach((exercise) => {
-      // Create entries for the past 'days' days
-      for (let i = 0; i < days; i++) {
-        // Skip some days randomly to simulate not doing every exercise every session
-        if (Math.random() > 0.7) continue;
-
-        const date = new Date();
-        date.setDate(date.getDate() - i);
-
-        // For progress visualization, we'll make the weight increase slightly over time
-        // and the RIR decrease (showing improvement)
-        const baseWeight =
-          exercise === 'Bench Press'
-            ? 80
-            : exercise === 'Squat'
-              ? 100
-              : exercise === 'Deadlift'
-                ? 120
-                : exercise === 'Pull-up'
-                  ? 0
-                  : 60;
-
-        // Slight progress over time (newer dates have higher weight)
-        const weight = baseWeight - i * 0.2 + (Math.random() * 5 - 2.5);
-
-        // RIR fluctuates but trends lower (better) over time
-        const rir = Math.max(
-          0,
-          Math.min(5, Math.floor(3 - i * 0.05 + Math.random() * 2))
-        );
-
-        logs.push({
-          exercise_name: exercise,
-          reps: `${8 + Math.floor(Math.random() * 4)}`,
-          weight: parseFloat(weight.toFixed(1)),
-          rir,
-          feedback: ['Good session', 'Feeling strong', 'Challenging', 'Easy'][
-            Math.floor(Math.random() * 4)
-          ],
-          created_at: date.toISOString(),
-        });
-      }
-    });
-
-    // Sort by date, oldest first
-    return logs.sort(
-      (a, b) =>
-        new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-    );
   }
 
   private async generateProgressionSuggestions(

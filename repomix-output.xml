@@ -95,8 +95,6 @@ mobile/
   README.md
   tailwind.config.js
   tsconfig.json
-proto/
-  services.proto
 server/
   generated/
     prisma/
@@ -17909,181 +17907,6 @@ declare module 'fastify' {
 export default fastifyPlugin(dbPlugin, { name: 'db' });
 </file>
 
-<file path="proto/services.proto">
-syntax = "proto3";
-
-package fitness;
-
-// User service for account management
-service UserService {
-  rpc GetUserProfile(UserIdRequest) returns (UserProfileResponse);
-  rpc CreateUserProfile(CreateUserRequest) returns (UserProfileResponse);
-  rpc UpdateUserProfile(UpdateUserRequest) returns (UserProfileResponse);
-  rpc AuthenticateUser(LoginRequest) returns (AuthResponse);
-}
-
-// Training service for workout plans
-service TrainingService {
-  rpc GetTrainingPlan(TrainingIdRequest) returns (TrainingPlanResponse);
-  rpc GenerateTrainingPlan(TrainingPlanRequest) returns (TrainingPlanResponse);
-  rpc UpdateTrainingPlan(UpdateTrainingRequest) returns (TrainingPlanResponse);
-  rpc ListUserTrainingPlans(UserIdRequest) returns (TrainingPlansListResponse);
-  rpc SubmitSessionFeedback(SubmitSessionFeedbackRequest) returns (SubmitSessionFeedbackResponse);
-  rpc GenerateProgressionSuggestions(ProgressionSuggestionsRequest) returns (ProgressionSuggestionsResponse);
-}
-
-// User related messages
-message UserIdRequest {
-  string userId = 1;
-}
-
-message CreateUserRequest {
-  string email = 1;
-  string password = 2;
-  string firstName = 3;
-  string lastName = 4;
-  ProfileData profileData = 5;
-}
-
-message UpdateUserRequest {
-  string userId = 1;
-  string firstName = 2;
-  string lastName = 3;
-  ProfileData profileData = 4;
-}
-
-message LoginRequest {
-  string email = 1;
-  string password = 2;
-}
-
-message AuthResponse {
-  string token = 1;
-  UserProfile user = 2;
-}
-
-message UserProfileResponse {
-  string id = 1;
-  string email = 2;
-  string firstName = 3;
-  string lastName = 4;
-  ProfileData profile = 5;
-}
-
-message ProfileData {
-  int32 age = 1;
-  float weight = 2;
-  float height = 3;
-  string fitnessLevel = 4;
-  repeated string fitnessGoals = 5;
-  repeated string medicalIssues = 6;
-  repeated string availableEquipment = 7;
-  string trainingPreferences = 8; // JSON string
-}
-
-message UserProfile {
-  string id = 1;
-  string email = 2;
-  string firstName = 3;
-  string lastName = 4;
-}
-
-// Training related messages
-message TrainingIdRequest {
-  string trainingId = 1;
-}
-
-message TrainingPlanRequest {
-  string userId = 1;
-  string name = 2;
-  string description = 3;
-  int32 daysPerWeek = 4;
-  string focusArea = 5;
-  int32 sessionDuration = 6;
-  bool includeWarmup = 7;
-  bool includeCooldown = 8;
-}
-
-message UpdateTrainingRequest {
-  string trainingId = 1;
-  string name = 2;
-  string description = 3;
-  bool isActive = 4;
-  repeated ExerciseData exercises = 5;
-}
-
-message TrainingPlanResponse {
-  string id = 1;
-  string userId = 2;
-  string name = 3;
-  string description = 4;
-  string createdAt = 5;
-  string updatedAt = 6;
-  bool isActive = 7;
-  string generatedBy = 8;
-  repeated ExerciseData exercises = 9;
-}
-
-message TrainingPlansListResponse {
-  repeated TrainingPlanResponse trainings = 1;
-}
-
-message ExerciseData {
-  string id = 1;
-  string name = 2;
-  string description = 3;
-  int32 sets = 4;
-  string reps = 5;
-  int32 restTime = 6;
-  string notes = 7;
-  int32 dayOfWeek = 8;
-  int32 order = 9;
-}
-
-// Session feedback related messages
-message ExerciseFeedback {
-  string exercise_name = 1;
-  string reps = 2;
-  float weight = 3;
-  int32 rir = 4;
-  string notes = 5;
-}
-
-message SubmitSessionFeedbackRequest {
-  string user_id = 1;
-  string session_id = 2;
-  repeated ExerciseFeedback exercises_feedback = 3;
-}
-
-message SubmitSessionFeedbackResponse {
-  bool success = 1;
-  string message = 2;
-}
-
-// Progression suggestions related messages
-message ProgressionSuggestionsRequest {
-  string user_id = 1;
-  string training_plan_id = 2;
-  int32 history_weeks = 3; // Number of weeks of history to analyze (2-4 typically)
-}
-
-message ExerciseModificationSuggestion {
-  string exercise_id = 1;
-  string suggestion = 2;
-  float new_weight = 3;
-  string replace_with = 4;
-}
-
-message ProgressionSuggestionsResponse {
-  string training_plan_id = 1;
-  bool deload_recommended = 2;
-  string summary = 3;
-  repeated ExerciseModificationSuggestion modified_exercises = 4;
-  string generated_at = 5;
-  string model_used = 6;
-}
-</file>
-
 <file path="server/generated/prisma/edge.js">
 Object.defineProperty(exports, "__esModule", { value: true });
 
@@ -30928,6 +30751,10 @@ import {
   Exercise as ExerciseProto,
   SubmitSessionFeedbackRequest as SubmitSessionFeedbackRequestProto,
   SubmitSessionFeedbackResponse as SubmitSessionFeedbackResponseProto,
+  ProgressRequest,
+  ProgressResponse,
+  ExerciseProgress,
+  ProgressPoint,
 } from '../generated/training/training';
 
 // Define service endpoints
@@ -31637,7 +31464,6 @@ class GrpcClient {
     request: GetUserExerciseLogsRequest
   ): Promise<GetUserExerciseLogsResponse> {
     try {
-      // This would be a real gRPC call in production
       console.log('Getting exercise logs for user:', request.user_id);
 
       // Check if we have an auth token
@@ -31645,92 +31471,84 @@ class GrpcClient {
         throw new Error('Authentication required');
       }
 
-      // Simulating network delay
-      await new Promise((resolve) => setTimeout(resolve, 700));
+      // Calculate date range based on days parameter (if provided)
+      let startDate: string | undefined;
+      if (request.days) {
+        const start = new Date();
+        start.setDate(start.getDate() - request.days);
+        startDate = start.toISOString().split('T')[0]; // Format as YYYY-MM-DD
+      }
 
-      // Mock response data
-      return {
-        logs: this.generateMockExerciseLogs(
-          request.user_id,
-          request.exercise_name,
-          request.days || 30
-        ),
+      // Create the gRPC request message
+      const progressRequest = ProgressRequest.create({
+        userId: request.user_id,
+        startDate: startDate,
+      });
+
+      // Define the GetUserProgress method from the TrainingService
+      const progressMethod: GrpcMethodDefinition<any, any> = {
+        methodName: 'GetUserProgress',
+        service: { serviceName: TrainingServiceServiceName },
+        requestStream: false,
+        responseStream: false,
+        requestType: {
+          new: () => ProgressRequest.create({}),
+          encode: (message: any, writer?: any) =>
+            ProgressRequest.encode(message, writer),
+        } as any,
+        responseType: {
+          new: () => ProgressResponse.create({}),
+          decode: (reader: any, length?: number) =>
+            ProgressResponse.decode(reader, length),
+        } as any,
       };
+
+      // Make the gRPC call
+      const response = await callUnary<ProgressRequest, ProgressResponse>(
+        progressMethod,
+        progressRequest,
+        this.authToken
+      );
+
+      // Transform the ProgressResponse into the ExerciseLog format
+      const logs: ExerciseLog[] = [];
+
+      response.exerciseProgress.forEach((exercise: ExerciseProgress) => {
+        // Skip if we're filtering by exercise name and this isn't it
+        if (
+          request.exercise_name &&
+          exercise.exerciseName.toLowerCase() !==
+            request.exercise_name.toLowerCase()
+        ) {
+          return;
+        }
+
+        // Add each progress point as a log entry
+        exercise.progressPoints.forEach((point: ProgressPoint) => {
+          if (point.date) {
+            logs.push({
+              exercise_name: exercise.exerciseName,
+              reps: point.totalReps ? point.totalReps.toString() : '0',
+              weight: point.weight || 0,
+              rir: 0, // RIR not provided in progress data
+              feedback: '', // Feedback not provided in progress data
+              created_at: point.date,
+            });
+          }
+        });
+      });
+
+      // Sort by date, oldest first (for consistent visualization)
+      logs.sort(
+        (a, b) =>
+          new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      );
+
+      return { logs };
     } catch (error) {
       console.error('Get exercise logs error:', error);
       throw new Error('Failed to get exercise logs');
     }
-  }
-
-  private generateMockExerciseLogs(
-    userId: string,
-    exerciseName?: string,
-    days: number = 30
-  ): ExerciseLog[] {
-    // Get a list of exercise names
-    const exerciseNames = [
-      'Bench Press',
-      'Squat',
-      'Deadlift',
-      'Pull-up',
-      'Shoulder Press',
-    ];
-
-    // If a specific exercise is requested, filter to that one
-    const exercises = exerciseName ? [exerciseName] : exerciseNames;
-
-    const logs: ExerciseLog[] = [];
-
-    // Generate mock data for each exercise
-    exercises.forEach((exercise) => {
-      // Create entries for the past 'days' days
-      for (let i = 0; i < days; i++) {
-        // Skip some days randomly to simulate not doing every exercise every session
-        if (Math.random() > 0.7) continue;
-
-        const date = new Date();
-        date.setDate(date.getDate() - i);
-
-        // For progress visualization, we'll make the weight increase slightly over time
-        // and the RIR decrease (showing improvement)
-        const baseWeight =
-          exercise === 'Bench Press'
-            ? 80
-            : exercise === 'Squat'
-              ? 100
-              : exercise === 'Deadlift'
-                ? 120
-                : exercise === 'Pull-up'
-                  ? 0
-                  : 60;
-
-        // Slight progress over time (newer dates have higher weight)
-        const weight = baseWeight - i * 0.2 + (Math.random() * 5 - 2.5);
-
-        // RIR fluctuates but trends lower (better) over time
-        const rir = Math.max(
-          0,
-          Math.min(5, Math.floor(3 - i * 0.05 + Math.random() * 2))
-        );
-
-        logs.push({
-          exercise_name: exercise,
-          reps: `${8 + Math.floor(Math.random() * 4)}`,
-          weight: parseFloat(weight.toFixed(1)),
-          rir,
-          feedback: ['Good session', 'Feeling strong', 'Challenging', 'Easy'][
-            Math.floor(Math.random() * 4)
-          ],
-          created_at: date.toISOString(),
-        });
-      }
-    });
-
-    // Sort by date, oldest first
-    return logs.sort(
-      (a, b) =>
-        new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-    );
   }
 
   private async generateProgressionSuggestions(
