@@ -19,6 +19,8 @@ import {
   TrainingService as TrainingServiceProto,
   TrainingServiceServiceName,
   Exercise as ExerciseProto,
+  SubmitSessionFeedbackRequest as SubmitSessionFeedbackRequestProto,
+  SubmitSessionFeedbackResponse as SubmitSessionFeedbackResponseProto,
 } from '../generated/training/training';
 
 // Define service endpoints
@@ -525,7 +527,6 @@ class GrpcClient {
     request: SubmitSessionFeedbackRequest
   ): Promise<SubmitSessionFeedbackResponse> {
     try {
-      // This would be a real gRPC call in production
       console.log('Submitting session feedback for user:', request.user_id);
 
       // Check if we have an auth token
@@ -533,14 +534,54 @@ class GrpcClient {
         throw new Error('Authentication required');
       }
 
-      // Simulating network delay
-      await new Promise((resolve) => setTimeout(resolve, 800));
+      // Convert frontend request to proto format
+      const protoRequest = SubmitSessionFeedbackRequestProto.create({
+        userId: request.user_id,
+        sessionId: request.session_id,
+        exercisesFeedback: request.exercises_feedback.map((feedback) => ({
+          exerciseName: feedback.exercise_name,
+          reps: feedback.reps,
+          weight: feedback.weight,
+          rir: feedback.rir,
+          notes: feedback.notes,
+        })),
+      });
 
-      // Mock successful response
+      // Define the gRPC method
+      const submitFeedbackMethod: GrpcMethodDefinition<any, any> = {
+        methodName: 'SubmitSessionFeedback',
+        service: { serviceName: TrainingServiceServiceName },
+        requestStream: false,
+        responseStream: false,
+        requestType: {
+          new: () => SubmitSessionFeedbackRequestProto.create({}),
+          encode: (message: any, writer?: any) =>
+            SubmitSessionFeedbackRequestProto.encode(message, writer),
+        } as any,
+        responseType: {
+          new: () => SubmitSessionFeedbackResponseProto.create({}),
+          decode: (reader: any, length?: number) =>
+            SubmitSessionFeedbackResponseProto.decode(reader, length),
+        } as any,
+      };
+
+      // Make the gRPC call
+      const response = await callUnary<any, any>(
+        submitFeedbackMethod,
+        protoRequest,
+        this.authToken
+      );
+
+      // Type the response correctly
+      const typedResponse = response as ReturnType<
+        typeof SubmitSessionFeedbackResponseProto.create
+      >;
+
+      // Convert proto response to frontend format
       return {
-        success: true,
-        message: 'Session feedback submitted successfully',
-        timestamp: new Date().toISOString(),
+        success: typedResponse.success,
+        message: typedResponse.message,
+        timestamp: new Date().toISOString(), // Add timestamp if not present in proto
       };
     } catch (error) {
       console.error('Submit session feedback error:', error);
