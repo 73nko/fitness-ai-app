@@ -27,11 +27,15 @@ import grpcClient, {
 interface SuggestionCardProps {
   suggestion: ExerciseModificationSuggestion;
   isDeloadRecommended: boolean;
+  isAccepted: boolean;
+  onToggleAccept: () => void;
 }
 
 function SuggestionCard({
   suggestion,
   isDeloadRecommended,
+  isAccepted,
+  onToggleAccept,
 }: SuggestionCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
 
@@ -51,55 +55,97 @@ function SuggestionCard({
   const suggestionType = getSuggestionType();
 
   return (
-    <TouchableOpacity
-      style={styles.suggestionCard}
-      onPress={() => setIsExpanded(!isExpanded)}
-      activeOpacity={0.8}>
+    <View
+      style={[
+        styles.suggestionCard,
+        !isAccepted && styles.suggestionCardInactive,
+      ]}>
       <View style={styles.cardHeader}>
-        <Text style={styles.exerciseName}>{suggestion.exercise_id}</Text>
-        <View
-          style={[
-            styles.suggestionTypeBadge,
-            {
-              backgroundColor: suggestionType.color + '20', // Add transparency
-              borderColor: suggestionType.color,
-            },
-          ]}>
-          <Text
+        <Text style={[styles.exerciseName, !isAccepted && styles.textInactive]}>
+          {suggestion.exercise_id}
+        </Text>
+        <View style={styles.cardHeaderRight}>
+          <View
             style={[
-              styles.suggestionTypeBadgeText,
-              { color: suggestionType.color },
+              styles.suggestionTypeBadge,
+              {
+                backgroundColor: suggestionType.color + '20', // Add transparency
+                borderColor: suggestionType.color,
+              },
             ]}>
-            {suggestionType.type}
+            <Text
+              style={[
+                styles.suggestionTypeBadgeText,
+                { color: suggestionType.color },
+              ]}>
+              {suggestionType.type}
+            </Text>
+          </View>
+          <TouchableOpacity
+            style={[
+              styles.acceptButton,
+              isAccepted
+                ? styles.acceptButtonActive
+                : styles.acceptButtonInactive,
+            ]}
+            onPress={onToggleAccept}>
+            <Text
+              style={[
+                styles.acceptButtonText,
+                isAccepted
+                  ? styles.acceptButtonTextActive
+                  : styles.acceptButtonTextInactive,
+              ]}>
+              {isAccepted ? '✓ Accepted' : '× Rejected'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      <TouchableOpacity
+        onPress={() => setIsExpanded(!isExpanded)}
+        activeOpacity={0.8}>
+        <Text
+          style={[styles.suggestionText, !isAccepted && styles.textInactive]}>
+          {suggestion.suggestion}
+        </Text>
+
+        {isExpanded && (
+          <View style={styles.cardDetails}>
+            {suggestion.new_weight && (
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>New Target Weight:</Text>
+                <Text
+                  style={[
+                    styles.detailValue,
+                    !isAccepted && styles.textInactive,
+                  ]}>
+                  {suggestion.new_weight} kg
+                </Text>
+              </View>
+            )}
+            {suggestion.replace_with && (
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Replace With:</Text>
+                <Text
+                  style={[
+                    styles.detailValue,
+                    !isAccepted && styles.textInactive,
+                  ]}>
+                  {suggestion.replace_with}
+                </Text>
+              </View>
+            )}
+          </View>
+        )}
+
+        <View style={styles.cardFooter}>
+          <Text style={styles.expandHint}>
+            {isExpanded ? 'Tap to collapse' : 'Tap for details'}
           </Text>
         </View>
-      </View>
-
-      <Text style={styles.suggestionText}>{suggestion.suggestion}</Text>
-
-      {isExpanded && (
-        <View style={styles.cardDetails}>
-          {suggestion.new_weight && (
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>New Target Weight:</Text>
-              <Text style={styles.detailValue}>{suggestion.new_weight} kg</Text>
-            </View>
-          )}
-          {suggestion.replace_with && (
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Replace With:</Text>
-              <Text style={styles.detailValue}>{suggestion.replace_with}</Text>
-            </View>
-          )}
-        </View>
-      )}
-
-      <View style={styles.cardFooter}>
-        <Text style={styles.expandHint}>
-          {isExpanded ? 'Tap to collapse' : 'Tap for details'}
-        </Text>
-      </View>
-    </TouchableOpacity>
+      </TouchableOpacity>
+    </View>
   );
 }
 
@@ -134,6 +180,9 @@ export default function ProgressAnalysisScreen() {
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [historyWeeks, setHistoryWeeks] = useState<number>(4); // Default to 4 weeks history
+  const [acceptedSuggestions, setAcceptedSuggestions] = useState<{
+    [key: string]: boolean;
+  }>({});
 
   // Use the most active training plan or the one from route params
   const trainingPlanId = route.params?.trainingPlanId || '';
@@ -206,14 +255,53 @@ export default function ProgressAnalysisScreen() {
     );
   };
 
-  // Function to apply the suggested changes to the training plan
+  // Initialize accepted suggestions when analysis is loaded
+  useEffect(() => {
+    if (analysis) {
+      const initialAcceptedState = analysis.modified_exercises.reduce<{
+        [key: string]: boolean;
+      }>(
+        (acc, suggestion: ExerciseModificationSuggestion) => ({
+          ...acc,
+          [suggestion.exercise_id]: true, // All suggestions accepted by default
+        }),
+        {}
+      );
+      setAcceptedSuggestions(initialAcceptedState);
+    }
+  }, [analysis]);
+
+  // Get count of accepted suggestions
+  const acceptedCount =
+    Object.values(acceptedSuggestions).filter(Boolean).length;
+  const totalSuggestions = analysis?.modified_exercises.length || 0;
+
+  // Function to toggle suggestion acceptance
+  const handleToggleSuggestion = (exerciseId: string) => {
+    setAcceptedSuggestions((prev: { [key: string]: boolean }) => ({
+      ...prev,
+      [exerciseId]: !prev[exerciseId],
+    }));
+  };
+
+  // Modified handleApplySuggestions function
   const handleApplySuggestions = async () => {
     if (!analysis || !trainingPlan) return;
+
+    // Check if any suggestions are accepted
+    if (acceptedCount === 0) {
+      Alert.alert(
+        'No Suggestions Selected',
+        'Please accept at least one suggestion to apply changes.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
 
     // Confirmation alert
     Alert.alert(
       'Apply Suggestions',
-      'This will update your training plan with the recommended changes. Continue?',
+      `This will update your training plan with ${acceptedCount} accepted change${acceptedCount !== 1 ? 's' : ''}. Continue?`,
       [
         {
           text: 'Cancel',
@@ -228,8 +316,11 @@ export default function ProgressAnalysisScreen() {
               // Get the current exercises from the training plan
               const currentExercises = [...trainingPlan.exercises];
 
-              // Apply the changes from the suggestions
+              // Apply only the accepted changes from the suggestions
               analysis.modified_exercises.forEach((suggestion) => {
+                // Skip if suggestion is not accepted
+                if (!acceptedSuggestions[suggestion.exercise_id]) return;
+
                 const exerciseIndex = currentExercises.findIndex(
                   (ex) =>
                     ex.id === suggestion.exercise_id ||
@@ -264,7 +355,7 @@ export default function ProgressAnalysisScreen() {
               if (result?.success) {
                 Alert.alert(
                   'Success',
-                  'Your training plan has been updated with the suggested changes.',
+                  `Your training plan has been updated with ${acceptedCount} accepted change${acceptedCount !== 1 ? 's' : ''}.`,
                   [
                     {
                       text: 'OK',
@@ -384,12 +475,12 @@ export default function ProgressAnalysisScreen() {
           </View>
         </View>
 
-        {/* Modified exercises section */}
+        {/* Modified exercises section with counter */}
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Suggested Adjustments</Text>
           <Text style={styles.sectionSubtitle}>
-            {analysis.modified_exercises.length} exercise
-            {analysis.modified_exercises.length !== 1 ? 's' : ''} to modify
+            {acceptedCount} of {totalSuggestions} suggestion
+            {totalSuggestions !== 1 ? 's' : ''} accepted
           </Text>
         </View>
 
@@ -399,6 +490,10 @@ export default function ProgressAnalysisScreen() {
             key={`${suggestion.exercise_id}-${index}`}
             suggestion={suggestion}
             isDeloadRecommended={analysis.deload_recommended}
+            isAccepted={acceptedSuggestions[suggestion.exercise_id] ?? true}
+            onToggleAccept={() =>
+              handleToggleSuggestion(suggestion.exercise_id)
+            }
           />
         ))}
 
@@ -415,14 +510,17 @@ export default function ProgressAnalysisScreen() {
             style={[
               styles.actionButton,
               styles.primaryButton,
-              (isLoading || isSaving) && styles.disabledButton,
+              (isLoading || isSaving || acceptedCount === 0) &&
+                styles.disabledButton,
             ]}
             onPress={handleApplySuggestions}
-            disabled={isLoading || isSaving}>
+            disabled={isLoading || isSaving || acceptedCount === 0}>
             {isSaving ? (
               <ActivityIndicator size='small' color='#fff' />
             ) : (
-              <Text style={styles.actionButtonText}>Apply Suggestions</Text>
+              <Text style={[styles.actionButtonText, styles.primaryButtonText]}>
+                Apply {acceptedCount} Change{acceptedCount !== 1 ? 's' : ''}
+              </Text>
             )}
           </TouchableOpacity>
         </View>
@@ -761,5 +859,43 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingBottom: 24,
+  },
+  suggestionCardInactive: {
+    opacity: 0.6,
+  },
+  textInactive: {
+    color: '#9CA3AF',
+  },
+  cardHeaderRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  acceptButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    borderWidth: 1,
+  },
+  acceptButtonActive: {
+    backgroundColor: '#22C55E20',
+    borderColor: '#22C55E',
+  },
+  acceptButtonInactive: {
+    backgroundColor: '#EF444420',
+    borderColor: '#EF4444',
+  },
+  acceptButtonText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  acceptButtonTextActive: {
+    color: '#22C55E',
+  },
+  acceptButtonTextInactive: {
+    color: '#EF4444',
+  },
+  primaryButtonText: {
+    color: '#FFFFFF',
   },
 });
