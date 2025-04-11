@@ -83,7 +83,11 @@ export interface Exercise {
   /** Can be a range like "8-12" or specific like "10" */
   reps: string;
   /** Rest time in seconds */
-  restTime?: number | undefined;
+  restTime?:
+    | number
+    | undefined;
+  /** Weight used (if applicable) */
+  weight?: number | undefined;
   notes?:
     | string
     | undefined;
@@ -1090,6 +1094,7 @@ function createBaseExercise(): Exercise {
     sets: 0,
     reps: "",
     restTime: undefined,
+    weight: undefined,
     notes: undefined,
     dayOfWeek: 0,
     order: 0,
@@ -1116,14 +1121,17 @@ export const Exercise: MessageFns<Exercise> = {
     if (message.restTime !== undefined) {
       writer.uint32(48).int32(message.restTime);
     }
+    if (message.weight !== undefined) {
+      writer.uint32(61).float(message.weight);
+    }
     if (message.notes !== undefined) {
-      writer.uint32(58).string(message.notes);
+      writer.uint32(66).string(message.notes);
     }
     if (message.dayOfWeek !== 0) {
-      writer.uint32(64).int32(message.dayOfWeek);
+      writer.uint32(72).int32(message.dayOfWeek);
     }
     if (message.order !== 0) {
-      writer.uint32(72).int32(message.order);
+      writer.uint32(80).int32(message.order);
     }
     return writer;
   },
@@ -1184,23 +1192,31 @@ export const Exercise: MessageFns<Exercise> = {
           continue;
         }
         case 7: {
-          if (tag !== 58) {
+          if (tag !== 61) {
+            break;
+          }
+
+          message.weight = reader.float();
+          continue;
+        }
+        case 8: {
+          if (tag !== 66) {
             break;
           }
 
           message.notes = reader.string();
           continue;
         }
-        case 8: {
-          if (tag !== 64) {
+        case 9: {
+          if (tag !== 72) {
             break;
           }
 
           message.dayOfWeek = reader.int32();
           continue;
         }
-        case 9: {
-          if (tag !== 72) {
+        case 10: {
+          if (tag !== 80) {
             break;
           }
 
@@ -1224,6 +1240,7 @@ export const Exercise: MessageFns<Exercise> = {
       sets: isSet(object.sets) ? globalThis.Number(object.sets) : 0,
       reps: isSet(object.reps) ? globalThis.String(object.reps) : "",
       restTime: isSet(object.restTime) ? globalThis.Number(object.restTime) : undefined,
+      weight: isSet(object.weight) ? globalThis.Number(object.weight) : undefined,
       notes: isSet(object.notes) ? globalThis.String(object.notes) : undefined,
       dayOfWeek: isSet(object.dayOfWeek) ? globalThis.Number(object.dayOfWeek) : 0,
       order: isSet(object.order) ? globalThis.Number(object.order) : 0,
@@ -1250,6 +1267,9 @@ export const Exercise: MessageFns<Exercise> = {
     if (message.restTime !== undefined) {
       obj.restTime = Math.round(message.restTime);
     }
+    if (message.weight !== undefined) {
+      obj.weight = message.weight;
+    }
     if (message.notes !== undefined) {
       obj.notes = message.notes;
     }
@@ -1273,6 +1293,7 @@ export const Exercise: MessageFns<Exercise> = {
     message.sets = object.sets ?? 0;
     message.reps = object.reps ?? "";
     message.restTime = object.restTime ?? undefined;
+    message.weight = object.weight ?? undefined;
     message.notes = object.notes ?? undefined;
     message.dayOfWeek = object.dayOfWeek ?? 0;
     message.order = object.order ?? 0;

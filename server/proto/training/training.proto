@@ -98,9 +98,10 @@ message Exercise {
   int32 sets = 4;
   string reps = 5;  // Can be a range like "8-12" or specific like "10"
   optional int32 rest_time = 6;  // Rest time in seconds
-  optional string notes = 7;
-  int32 day_of_week = 8;  // 1-7 representing Monday-Sunday
-  int32 order = 9;  // Order within the day
+  optional float weight = 7;  // Weight used (if applicable)
+  optional string notes = 8;
+  int32 day_of_week = 9;  // 1-7 representing Monday-Sunday
+  int32 order = 10;  // Order within the day
 }
 
 // Exercise record

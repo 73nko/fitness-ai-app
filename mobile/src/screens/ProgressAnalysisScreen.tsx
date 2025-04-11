@@ -237,17 +237,17 @@ export default function ProgressAnalysisScreen() {
                 );
 
                 if (exerciseIndex >= 0) {
-                  // Found the exercise to modify
-                  const exercise = currentExercises[exerciseIndex];
+                  const exercise = { ...currentExercises[exerciseIndex] };
 
                   // If there's a weight recommendation, update it
                   if (suggestion.new_weight) {
-                    exercise.restTime = suggestion.new_weight; // Use restTime field to store weight
+                    exercise.weight = suggestion.new_weight;
                   }
 
-                  // If there's a replacement exercise, update the name
+                  // If there's a replacement exercise, update the name and description
                   if (suggestion.replace_with) {
                     exercise.name = suggestion.replace_with;
+                    exercise.description = `Modified from ${currentExercises[exerciseIndex].name} based on progression analysis`;
                   }
 
                   // Update the exercise in the array
@@ -255,7 +255,7 @@ export default function ProgressAnalysisScreen() {
                 }
               });
 
-              // Call the updateTrainingPlan method
+              // Call the updateTrainingPlan method from context
               const result = await updateTrainingPlan(
                 trainingPlanId,
                 currentExercises
@@ -264,7 +264,18 @@ export default function ProgressAnalysisScreen() {
               if (result?.success) {
                 Alert.alert(
                   'Success',
-                  'Your training plan has been updated with the suggested changes.'
+                  'Your training plan has been updated with the suggested changes.',
+                  [
+                    {
+                      text: 'OK',
+                      onPress: () => {
+                        // Navigate back to the plan summary with the updated plan
+                        navigation.navigate('PlanSummary', {
+                          plan: trainingPlan,
+                        });
+                      },
+                    },
+                  ]
                 );
               } else {
                 throw new Error(

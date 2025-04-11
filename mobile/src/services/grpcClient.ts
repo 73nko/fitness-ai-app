@@ -81,6 +81,7 @@ export interface ExerciseData {
   sets: number;
   reps: string;
   restTime: number;
+  weight: number;
   notes: string;
   dayOfWeek: number;
   order: number;
@@ -533,7 +534,7 @@ class GrpcClient {
           description: exercise.description || '',
           sets: exercise.sets,
           reps: exercise.reps,
-          restTime: exercise.restTime || 60,
+          weight: exercise.weight || 0,
           notes: exercise.notes || '',
           dayOfWeek: exercise.dayOfWeek,
           order: exercise.order,
@@ -650,110 +651,6 @@ class GrpcClient {
       console.error('Get today session error:', error);
       throw new Error('Failed to get today session');
     }
-  }
-
-  // Helper method to generate a mock training plan
-  private generateMockTrainingPlan(userId: string): TrainingPlanResponse {
-    return {
-      id: '123456',
-      userId: userId,
-      name: 'Weekly Strength Training',
-      description: 'A balanced plan focusing on strength and mobility',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      isActive: true,
-      generatedBy: 'AI',
-      exercises: [
-        {
-          id: 'ex1',
-          name: 'Barbell Squat',
-          description: 'Compound lower body exercise',
-          sets: 4,
-          reps: '8-10',
-          restTime: 120,
-          notes: 'Focus on proper form and depth',
-          dayOfWeek: 1, // Monday
-          order: 1,
-        },
-        {
-          id: 'ex2',
-          name: 'Bench Press',
-          description: 'Compound chest exercise',
-          sets: 4,
-          reps: '8-10',
-          restTime: 120,
-          notes: 'Keep shoulders retracted',
-          dayOfWeek: 1, // Monday
-          order: 2,
-        },
-        {
-          id: 'ex3',
-          name: 'Deadlift',
-          description: 'Compound back exercise',
-          sets: 3,
-          reps: '6-8',
-          restTime: 180,
-          notes: 'Use belt for heavy sets',
-          dayOfWeek: 3, // Wednesday
-          order: 1,
-        },
-        {
-          id: 'ex4',
-          name: 'Pull-ups',
-          description: 'Upper body pull exercise',
-          sets: 3,
-          reps: '8-12',
-          restTime: 90,
-          notes: 'Use assistance band if needed',
-          dayOfWeek: 3, // Wednesday
-          order: 2,
-        },
-        {
-          id: 'ex5',
-          name: 'Overhead Press',
-          description: 'Shoulder compound exercise',
-          sets: 3,
-          reps: '8-10',
-          restTime: 120,
-          notes: 'Keep core tight',
-          dayOfWeek: 5, // Friday
-          order: 1,
-        },
-        {
-          id: 'ex6',
-          name: 'Barbell Rows',
-          description: 'Back compound exercise',
-          sets: 3,
-          reps: '8-10',
-          restTime: 120,
-          notes: 'Keep back neutral',
-          dayOfWeek: 5, // Friday
-          order: 2,
-        },
-        {
-          id: 'ex7',
-          name: 'Lunges',
-          description: 'Unilateral leg exercise',
-          sets: 3,
-          reps: '10-12 each leg',
-          restTime: 90,
-          notes: 'Focus on stability',
-          dayOfWeek: new Date().getDay(), // Today
-          order: 1,
-        },
-        {
-          id: 'ex8',
-          name: 'Push-ups',
-          description: 'Bodyweight chest exercise',
-          sets: 3,
-          reps: '15-20',
-          restTime: 60,
-          notes: 'Keep body straight',
-          dayOfWeek: new Date().getDay(), // Today
-          order: 2,
-        },
-      ],
-    };
   }
 
   private async getUserExerciseLogs(
@@ -930,21 +827,21 @@ class GrpcClient {
         (exercise) => ({
           id: exercise.id,
           name: exercise.name,
-          description: exercise.description,
+          description: exercise.description || '',
           sets: exercise.sets,
           reps: exercise.reps,
-          rest_time: exercise.restTime,
-          notes: exercise.notes,
-          day_of_week: exercise.dayOfWeek,
+          restTime: exercise.restTime,
+          notes: exercise.notes || '',
+          dayOfWeek: exercise.dayOfWeek,
           order: exercise.order,
         })
       );
 
-      // Create the request object
-      const req = {
-        training_plan_id: request.training_plan_id,
-        updated_exercises: transformedExercises,
-      };
+      // Create the proto request
+      const protoRequest = UpdateTrainingPlanRequestProto.create({
+        trainingPlanId: request.training_plan_id,
+        updatedExercises: transformedExercises,
+      });
 
       // Define the method details for the UpdateTrainingPlan endpoint
       const updateMethod: GrpcMethodDefinition<any, any> = {
@@ -953,21 +850,22 @@ class GrpcClient {
         requestStream: false,
         responseStream: false,
         requestType: {
-          new: () => ({}),
-          encode: (msg: any) => msg,
+          new: () => UpdateTrainingPlanRequestProto.create({}),
+          encode: (message: any, writer?: any) =>
+            UpdateTrainingPlanRequestProto.encode(message, writer),
         } as any,
         responseType: {
-          new: () => ({}),
-          decode: (reader: any) => reader,
+          new: () => UpdateTrainingPlanResponseProto.create({}),
+          decode: (reader: any, length?: number) =>
+            UpdateTrainingPlanResponseProto.decode(reader, length),
         } as any,
       };
 
       // Make the gRPC call
-      const response = await callUnary<any, any>(
-        updateMethod,
-        req,
-        this.authToken
-      );
+      const response = await callUnary<
+        UpdateTrainingPlanRequestProto,
+        UpdateTrainingPlanResponseProto
+      >(updateMethod, protoRequest, this.authToken);
 
       // Return the response
       return {
