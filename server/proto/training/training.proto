@@ -20,6 +20,9 @@ service TrainingService {
 
   // Generate progression suggestions
   rpc GenerateProgressionSuggestions(ProgressionSuggestionsRequest) returns (ProgressionSuggestionsResponse);
+
+  // Update training plan exercises
+  rpc UpdateTrainingPlan(UpdateTrainingPlanRequest) returns (UpdateTrainingPlanResponse);
 }
 
 // Generate plan request
@@ -175,4 +178,16 @@ message ProgressionSuggestionsResponse {
   repeated ExerciseModificationSuggestion modified_exercises = 4;
   string generated_at = 5;
   string model_used = 6;
+}
+
+// UpdateTrainingPlan request
+message UpdateTrainingPlanRequest {
+  string training_plan_id = 1;
+  repeated Exercise updated_exercises = 2;
+}
+
+// UpdateTrainingPlan response
+message UpdateTrainingPlanResponse {
+  bool success = 1;
+  string message = 2;
 }

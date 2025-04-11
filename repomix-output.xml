@@ -152,6 +152,7 @@ server/
           aiHandler.ts
           index.ts
         training/
+          index.ts
           trainingHandler.ts
         user/
           userHandler.ts
@@ -185,172 +186,42 @@ web.Dockerfile
 <files>
 This section contains the contents of the repository's files.
 
-<file path="mobile/src/context/TrainingContext.tsx">
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import grpcClient, {
-  TrainingPlanResponse,
-  TrainingPlanRequest,
-} from '../services/grpcClient';
-import { useAuth } from './AuthContext';
+<file path="server/src/domain/grpc/training/index.ts">
+import { FastifyPluginAsync } from 'fastify';
+import * as grpc from '@grpc/grpc-js';
+import * as protoLoader from '@grpc/proto-loader';
+import path from 'path';
+import { trainingHandler } from './trainingHandler';
 
-// Training plan storage key
-const TRAINING_PLAN_KEY = '@fitness_app:training_plan';
+// Define the file path for the proto file
+const PROTO_PATH = path.resolve(
+  __dirname,
+  '../../../../proto/training/training.proto'
+);
 
-interface TrainingContextType {
-  trainingPlan: TrainingPlanResponse | null;
-  isLoading: boolean;
-  error: string | null;
-  setTrainingPlan: (plan: TrainingPlanResponse | null) => void;
-  fetchTrainingPlan: () => Promise<TrainingPlanResponse | null>;
-  fetchTodaySession: () => Promise<TrainingPlanResponse | null>;
-  clearError: () => void;
-}
+const trainingPlugin: FastifyPluginAsync = async (fastify) => {
+  // Load the proto file
+  const packageDefinition = protoLoader.loadSync(PROTO_PATH, {
+    keepCase: true,
+    longs: String,
+    enums: String,
+    defaults: true,
+    oneofs: true,
+  });
 
-interface TrainingProviderProps {
-  children: React.ReactNode;
-}
+  // Load the gRPC service definition
+  const serviceProto = grpc.loadPackageDefinition(packageDefinition).training;
 
-const TrainingContext = createContext<TrainingContextType>({
-  trainingPlan: null,
-  isLoading: false,
-  error: null,
-  setTrainingPlan: () => {},
-  fetchTrainingPlan: async () => null,
-  fetchTodaySession: async () => null,
-  clearError: () => {},
-});
-
-export const useTraining = () => useContext(TrainingContext);
-
-export function TrainingProvider({ children }: TrainingProviderProps) {
-  const [trainingPlan, setTrainingPlan] = useState<TrainingPlanResponse | null>(
-    null
+  // Register the training service with the gRPC server
+  fastify.grpc.server.addService(
+    (serviceProto as any).TrainingService.service,
+    trainingHandler
   );
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const { user, isAuthenticated } = useAuth();
 
-  // Load cached training plan on mount
-  useEffect(() => {
-    const loadCachedTrainingPlan = async () => {
-      if (!isAuthenticated) return;
+  fastify.log.info('Training gRPC service registered');
+};
 
-      try {
-        const storedPlan = await AsyncStorage.getItem(TRAINING_PLAN_KEY);
-        if (storedPlan) {
-          const parsedPlan = JSON.parse(storedPlan) as TrainingPlanResponse;
-          // Only set the plan if it belongs to the current user
-          if (parsedPlan.userId === user?.id) {
-            setTrainingPlan(parsedPlan);
-          } else {
-            // Clear cached plan if it's for a different user
-            await AsyncStorage.removeItem(TRAINING_PLAN_KEY);
-          }
-        }
-      } catch (err) {
-        console.error('Failed to load cached training plan:', err);
-      }
-    };
-
-    loadCachedTrainingPlan();
-  }, [isAuthenticated, user?.id]);
-
-  // Cache training plan when it changes
-  useEffect(() => {
-    const cacheTrainingPlan = async () => {
-      if (trainingPlan) {
-        try {
-          await AsyncStorage.setItem(
-            TRAINING_PLAN_KEY,
-            JSON.stringify(trainingPlan)
-          );
-        } catch (err) {
-          console.error('Failed to cache training plan:', err);
-        }
-      }
-    };
-
-    cacheTrainingPlan();
-  }, [trainingPlan]);
-
-  const fetchTrainingPlan = async (): Promise<TrainingPlanResponse | null> => {
-    if (!isAuthenticated || !user) {
-      setError('User not authenticated');
-      return null;
-    }
-
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      // For now, we assume the user has a default request
-      // This could be enhanced to accept parameters
-      const request: TrainingPlanRequest = {
-        userId: user.id,
-        name: 'My Training Plan',
-        description: 'Generated training plan',
-        daysPerWeek: 3,
-        focusArea: 'general',
-        sessionDuration: 60,
-        includeWarmup: true,
-        includeCooldown: true,
-      };
-
-      const response =
-        await grpcClient.trainingService.generateTrainingPlan(request);
-      setTrainingPlan(response);
-      return response;
-    } catch (err: any) {
-      console.error('Failed to fetch training plan:', err);
-      setError(err.message || 'Failed to fetch training plan');
-      return null;
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const fetchTodaySession = async (): Promise<TrainingPlanResponse | null> => {
-    if (!isAuthenticated || !user) {
-      setError('User not authenticated');
-      return null;
-    }
-
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      const response = await grpcClient.trainingService.getTodaySession(
-        user.id
-      );
-      setTrainingPlan(response);
-      return response;
-    } catch (err: any) {
-      console.error("Failed to fetch today's session:", err);
-      setError(err.message || "Failed to fetch today's training session");
-      return null;
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const clearError = () => setError(null);
-
-  return (
-    <TrainingContext.Provider
-      value={{
-        trainingPlan,
-        isLoading,
-        error,
-        setTrainingPlan,
-        fetchTrainingPlan,
-        fetchTodaySession,
-        clearError,
-      }}>
-      {children}
-    </TrainingContext.Provider>
-  );
-}
+export default trainingPlugin;
 </file>
 
 <file path="mobile/src/components/Button.tsx">
@@ -1009,6 +880,225 @@ export function isDebugEnabled(): boolean {
 }
 
 export default env;
+</file>
+
+<file path="mobile/src/context/TrainingContext.tsx">
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import grpcClient, {
+  TrainingPlanResponse,
+  TrainingPlanRequest,
+  UpdateTrainingPlanRequest,
+  UpdateTrainingPlanResponse,
+  ExerciseData,
+} from '../services/grpcClient';
+import { useAuth } from './AuthContext';
+
+// Training plan storage key
+const TRAINING_PLAN_KEY = '@fitness_app:training_plan';
+
+interface TrainingContextType {
+  trainingPlan: TrainingPlanResponse | null;
+  isLoading: boolean;
+  error: string | null;
+  setTrainingPlan: (plan: TrainingPlanResponse | null) => void;
+  fetchTrainingPlan: () => Promise<TrainingPlanResponse | null>;
+  fetchTodaySession: () => Promise<TrainingPlanResponse | null>;
+  updateTrainingPlan: (
+    planId: string,
+    exercises: ExerciseData[]
+  ) => Promise<UpdateTrainingPlanResponse | null>;
+  clearError: () => void;
+}
+
+interface TrainingProviderProps {
+  children: React.ReactNode;
+}
+
+const TrainingContext = createContext<TrainingContextType>({
+  trainingPlan: null,
+  isLoading: false,
+  error: null,
+  setTrainingPlan: () => {},
+  fetchTrainingPlan: async () => null,
+  fetchTodaySession: async () => null,
+  updateTrainingPlan: async () => null,
+  clearError: () => {},
+});
+
+export const useTraining = () => useContext(TrainingContext);
+
+export function TrainingProvider({ children }: TrainingProviderProps) {
+  const [trainingPlan, setTrainingPlan] = useState<TrainingPlanResponse | null>(
+    null
+  );
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const { user, isAuthenticated } = useAuth();
+
+  // Load cached training plan on mount
+  useEffect(() => {
+    const loadCachedTrainingPlan = async () => {
+      if (!isAuthenticated) return;
+
+      try {
+        const storedPlan = await AsyncStorage.getItem(TRAINING_PLAN_KEY);
+        if (storedPlan) {
+          const parsedPlan = JSON.parse(storedPlan) as TrainingPlanResponse;
+          // Only set the plan if it belongs to the current user
+          if (parsedPlan.userId === user?.id) {
+            setTrainingPlan(parsedPlan);
+          } else {
+            // Clear cached plan if it's for a different user
+            await AsyncStorage.removeItem(TRAINING_PLAN_KEY);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load cached training plan:', err);
+      }
+    };
+
+    loadCachedTrainingPlan();
+  }, [isAuthenticated, user?.id]);
+
+  // Cache training plan when it changes
+  useEffect(() => {
+    const cacheTrainingPlan = async () => {
+      if (trainingPlan) {
+        try {
+          await AsyncStorage.setItem(
+            TRAINING_PLAN_KEY,
+            JSON.stringify(trainingPlan)
+          );
+        } catch (err) {
+          console.error('Failed to cache training plan:', err);
+        }
+      }
+    };
+
+    cacheTrainingPlan();
+  }, [trainingPlan]);
+
+  const fetchTrainingPlan = async (): Promise<TrainingPlanResponse | null> => {
+    if (!isAuthenticated || !user) {
+      setError('User not authenticated');
+      return null;
+    }
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      // For now, we assume the user has a default request
+      // This could be enhanced to accept parameters
+      const request: TrainingPlanRequest = {
+        userId: user.id,
+        name: 'My Training Plan',
+        description: 'Generated training plan',
+        daysPerWeek: 3,
+        focusArea: 'general',
+        sessionDuration: 60,
+        includeWarmup: true,
+        includeCooldown: true,
+      };
+
+      const response =
+        await grpcClient.trainingService.generateTrainingPlan(request);
+      setTrainingPlan(response);
+      return response;
+    } catch (err: any) {
+      console.error('Failed to fetch training plan:', err);
+      setError(err.message || 'Failed to fetch training plan');
+      return null;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const fetchTodaySession = async (): Promise<TrainingPlanResponse | null> => {
+    if (!isAuthenticated || !user) {
+      setError('User not authenticated');
+      return null;
+    }
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const response = await grpcClient.trainingService.getTodaySession(
+        user.id
+      );
+      setTrainingPlan(response);
+      return response;
+    } catch (err: any) {
+      console.error("Failed to fetch today's session:", err);
+      setError(err.message || "Failed to fetch today's training session");
+      return null;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const clearError = () => setError(null);
+
+  const updateTrainingPlan = async (
+    planId: string,
+    exercises: ExerciseData[]
+  ): Promise<UpdateTrainingPlanResponse | null> => {
+    if (!isAuthenticated || !user) {
+      setError('User not authenticated');
+      return null;
+    }
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const request: UpdateTrainingPlanRequest = {
+        training_plan_id: planId,
+        updated_exercises: exercises,
+      };
+
+      const response =
+        await grpcClient.trainingService.updateTrainingPlan(request);
+
+      // If successful, update the cached plan if it's the current one
+      if (response.success && trainingPlan && trainingPlan.id === planId) {
+        // Create a new plan with updated exercises
+        const updatedPlan = {
+          ...trainingPlan,
+          exercises: exercises,
+          updatedAt: new Date().toISOString(),
+        };
+        setTrainingPlan(updatedPlan);
+      }
+
+      return response;
+    } catch (err: any) {
+      console.error('Failed to update training plan:', err);
+      setError(err.message || 'Failed to update training plan');
+      return null;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <TrainingContext.Provider
+      value={{
+        trainingPlan,
+        isLoading,
+        error,
+        setTrainingPlan,
+        fetchTrainingPlan,
+        fetchTodaySession,
+        updateTrainingPlan,
+        clearError,
+      }}>
+      {children}
+    </TrainingContext.Provider>
+  );
+}
 </file>
 
 <file path="mobile/src/generated/ai/ai.ts">
@@ -4396,551 +4486,6 @@ export interface MessageFns<T> {
 }
 </file>
 
-<file path="mobile/src/screens/GeneratePlanScreen.tsx">
-import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  ScrollView,
-  ActivityIndicator,
-  Alert,
-  Switch,
-} from 'react-native';
-import { useNavigation } from '@react-navigation/native';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-
-import { RootStackParamList } from '../navigation';
-import { useAuth } from '../context/AuthContext';
-import grpcClient, { TrainingPlanRequest } from '../services/grpcClient';
-
-type GeneratePlanScreenNavigationProp = NativeStackNavigationProp<
-  RootStackParamList,
-  'GeneratePlan'
->;
-
-// Focus areas available for selection
-const FOCUS_AREAS = [
-  'Full Body',
-  'Upper Body',
-  'Lower Body',
-  'Core',
-  'Glutes',
-  'Arms',
-  'Back',
-  'Chest',
-  'Cardio',
-];
-
-export default function GeneratePlanScreen() {
-  const navigation = useNavigation<GeneratePlanScreenNavigationProp>();
-  const { user } = useAuth();
-
-  // Form state
-  const [name, setName] = useState('');
-  const [description, setDescription] = useState('');
-  const [daysPerWeek, setDaysPerWeek] = useState('3');
-  const [focusArea, setFocusArea] = useState(FOCUS_AREAS[0]);
-  const [sessionDuration, setSessionDuration] = useState('45');
-  const [includeWarmup, setIncludeWarmup] = useState(true);
-  const [includeCooldown, setIncludeCooldown] = useState(true);
-  const [isLoading, setIsLoading] = useState(false);
-  const [selectedFocusArea, setSelectedFocusArea] = useState('');
-
-  // Validation
-  const isFormValid = () => {
-    return (
-      name.trim() !== '' &&
-      !isNaN(parseInt(daysPerWeek)) &&
-      parseInt(daysPerWeek) > 0 &&
-      parseInt(daysPerWeek) <= 7 &&
-      focusArea !== '' &&
-      !isNaN(parseInt(sessionDuration)) &&
-      parseInt(sessionDuration) > 0
-    );
-  };
-
-  // Handle focus area selection
-  const selectFocusArea = (area: string) => {
-    setFocusArea(area);
-    setSelectedFocusArea(area);
-  };
-
-  // Handle form submission
-  const handleGeneratePlan = async () => {
-    if (!user?.id) {
-      Alert.alert('Error', 'You must be logged in to generate a training plan');
-      return;
-    }
-
-    if (!isFormValid()) {
-      Alert.alert(
-        'Invalid Form',
-        'Please fill out all required fields correctly'
-      );
-      return;
-    }
-
-    setIsLoading(true);
-
-    try {
-      const request: TrainingPlanRequest = {
-        userId: user.id,
-        name,
-        description,
-        daysPerWeek: parseInt(daysPerWeek),
-        focusArea,
-        sessionDuration: parseInt(sessionDuration),
-        includeWarmup,
-        includeCooldown,
-      };
-
-      const response =
-        await grpcClient.trainingService.generateTrainingPlan(request);
-
-      // Navigate to the summary screen with the generated plan
-      navigation.navigate('PlanSummary', { plan: response });
-    } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to generate training plan');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  return (
-    <ScrollView className='flex-1 bg-background'>
-      <View className='p-4'>
-        <Text className='text-2xl font-bold text-primary mb-4'>
-          Create Training Plan
-        </Text>
-
-        <View className='bg-white rounded-xl p-5 shadow-md mb-4'>
-          <Text className='text-lg font-medium text-text mb-1'>Plan Name*</Text>
-          <TextInput
-            className='border border-gray-300 rounded-lg p-3 mb-4 text-text'
-            placeholder='My Training Plan'
-            value={name}
-            onChangeText={setName}
-          />
-
-          <Text className='text-lg font-medium text-text mb-1'>
-            Description
-          </Text>
-          <TextInput
-            className='border border-gray-300 rounded-lg p-3 mb-4 text-text'
-            placeholder='Optional plan description'
-            value={description}
-            onChangeText={setDescription}
-            multiline
-            numberOfLines={3}
-          />
-
-          <Text className='text-lg font-medium text-text mb-1'>
-            Days Per Week*
-          </Text>
-          <TextInput
-            className='border border-gray-300 rounded-lg p-3 mb-4 text-text'
-            placeholder='3'
-            value={daysPerWeek}
-            onChangeText={setDaysPerWeek}
-            keyboardType='numeric'
-          />
-
-          <Text className='text-lg font-medium text-text mb-1'>
-            Focus Area*
-          </Text>
-          <View className='flex-row flex-wrap mb-4'>
-            {FOCUS_AREAS.map((area) => (
-              <TouchableOpacity
-                key={area}
-                className={`m-1 px-3 py-2 rounded-lg ${
-                  focusArea === area ? 'bg-primary' : 'bg-gray-200'
-                }`}
-                onPress={() => selectFocusArea(area)}>
-                <Text
-                  className={`${
-                    focusArea === area ? 'text-white' : 'text-text'
-                  }`}>
-                  {area}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          <Text className='text-lg font-medium text-text mb-1'>
-            Session Duration (minutes)*
-          </Text>
-          <TextInput
-            className='border border-gray-300 rounded-lg p-3 mb-4 text-text'
-            placeholder='45'
-            value={sessionDuration}
-            onChangeText={setSessionDuration}
-            keyboardType='numeric'
-          />
-
-          <View className='flex-row items-center justify-between mb-4'>
-            <Text className='text-lg font-medium text-text'>
-              Include Warmup
-            </Text>
-            <Switch
-              value={includeWarmup}
-              onValueChange={setIncludeWarmup}
-              trackColor={{ false: '#ddd', true: '#3B82F6' }}
-            />
-          </View>
-
-          <View className='flex-row items-center justify-between mb-4'>
-            <Text className='text-lg font-medium text-text'>
-              Include Cooldown
-            </Text>
-            <Switch
-              value={includeCooldown}
-              onValueChange={setIncludeCooldown}
-              trackColor={{ false: '#ddd', true: '#3B82F6' }}
-            />
-          </View>
-
-          <TouchableOpacity
-            className={`p-4 rounded-lg ${
-              isFormValid() && !isLoading ? 'bg-primary' : 'bg-gray-300'
-            }`}
-            onPress={handleGeneratePlan}
-            disabled={!isFormValid() || isLoading}>
-            {isLoading ? (
-              <ActivityIndicator color='#fff' />
-            ) : (
-              <Text className='text-white font-semibold text-center'>
-                Generate Training Plan
-              </Text>
-            )}
-          </TouchableOpacity>
-        </View>
-      </View>
-    </ScrollView>
-  );
-}
-</file>
-
-<file path="mobile/src/screens/LoginScreen.tsx">
-import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  ActivityIndicator,
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-} from 'react-native';
-import { useNavigation } from '@react-navigation/native';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-
-import { useAuth } from '../context/AuthContext';
-import { isValidEmail, isValidPassword } from '../utils/validation';
-import { RootStackParamList } from '../navigation';
-
-type LoginScreenNavigationProp = NativeStackNavigationProp<
-  RootStackParamList,
-  'Login'
->;
-
-interface LoginFormData {
-  email: string;
-  password: string;
-}
-
-interface FormErrors {
-  email?: string;
-  password?: string;
-}
-
-export default function LoginScreen() {
-  const navigation = useNavigation<LoginScreenNavigationProp>();
-  const { login, isLoading, error, clearError } = useAuth();
-
-  const [formData, setFormData] = useState<LoginFormData>({
-    email: '',
-    password: '',
-  });
-
-  const [formErrors, setFormErrors] = useState<FormErrors>({});
-
-  // Clear auth context errors when component unmounts
-  React.useEffect(() => {
-    return () => {
-      clearError();
-    };
-  }, [clearError]);
-
-  // Display auth error as an alert
-  React.useEffect(() => {
-    if (error) {
-      Alert.alert('Login Error', error);
-    }
-  }, [error]);
-
-  function validateForm(): boolean {
-    const errors: FormErrors = {};
-    let isValid = true;
-
-    // Email validation
-    if (!formData.email) {
-      errors.email = 'Email is required';
-      isValid = false;
-    } else if (!isValidEmail(formData.email)) {
-      errors.email = 'Please enter a valid email';
-      isValid = false;
-    }
-
-    // Password validation
-    if (!formData.password) {
-      errors.password = 'Password is required';
-      isValid = false;
-    }
-
-    setFormErrors(errors);
-    return isValid;
-  }
-
-  async function handleLogin() {
-    if (!validateForm()) return;
-
-    try {
-      await login(formData.email, formData.password);
-    } catch (err) {
-      // Error is handled by the AuthContext
-    }
-  }
-
-  function navigateToRegister() {
-    navigation.navigate('Register');
-  }
-
-  return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      className='flex-1 bg-background'>
-      <ScrollView contentContainerClassName='flex-grow'>
-        <View className='flex-1 p-6 justify-center'>
-          <View className='mb-8'>
-            <Text className='text-3xl font-bold text-center text-primary'>
-              Welcome Back
-            </Text>
-            <Text className='text-base text-center text-text-muted mt-2'>
-              Sign in to continue to your fitness journey
-            </Text>
-          </View>
-
-          <View className='mb-6'>
-            <Text className='text-sm font-medium text-text mb-1'>Email</Text>
-            <TextInput
-              className={`bg-white p-3 rounded-lg border ${
-                formErrors.email ? 'border-red-500' : 'border-gray-200'
-              }`}
-              placeholder='your@email.com'
-              keyboardType='email-address'
-              autoCapitalize='none'
-              value={formData.email}
-              onChangeText={(text) => {
-                setFormData({ ...formData, email: text });
-                if (formErrors.email) {
-                  setFormErrors({ ...formErrors, email: undefined });
-                }
-              }}
-            />
-            {formErrors.email && (
-              <Text className='text-red-500 text-xs mt-1'>
-                {formErrors.email}
-              </Text>
-            )}
-          </View>
-
-          <View className='mb-8'>
-            <Text className='text-sm font-medium text-text mb-1'>Password</Text>
-            <TextInput
-              className={`bg-white p-3 rounded-lg border ${
-                formErrors.password ? 'border-red-500' : 'border-gray-200'
-              }`}
-              placeholder='Password'
-              secureTextEntry
-              value={formData.password}
-              onChangeText={(text) => {
-                setFormData({ ...formData, password: text });
-                if (formErrors.password) {
-                  setFormErrors({ ...formErrors, password: undefined });
-                }
-              }}
-            />
-            {formErrors.password && (
-              <Text className='text-red-500 text-xs mt-1'>
-                {formErrors.password}
-              </Text>
-            )}
-          </View>
-
-          <TouchableOpacity
-            className={`${isLoading ? 'bg-gray-400' : 'bg-primary'} p-4 rounded-lg mb-4`}
-            onPress={handleLogin}
-            disabled={isLoading}>
-            {isLoading ? (
-              <ActivityIndicator color='white' />
-            ) : (
-              <Text className='text-white font-semibold text-center'>
-                Sign In
-              </Text>
-            )}
-          </TouchableOpacity>
-
-          <View className='flex-row justify-center'>
-            <Text className='text-text-muted'>Don't have an account? </Text>
-            <TouchableOpacity onPress={navigateToRegister}>
-              <Text className='text-primary font-medium'>Sign up</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
-  );
-}
-</file>
-
-<file path="mobile/src/screens/PlanSummaryScreen.tsx">
-import React from 'react';
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  ScrollView,
-  FlatList,
-} from 'react-native';
-import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-
-import { RootStackParamList } from '../navigation';
-import { ExerciseData } from '../services/grpcClient';
-import ExerciseCard from '../components/ExerciseCard';
-
-type PlanSummaryScreenNavigationProp = NativeStackNavigationProp<
-  RootStackParamList,
-  'PlanSummary'
->;
-
-type PlanSummaryScreenRouteProp = RouteProp<RootStackParamList, 'PlanSummary'>;
-
-// Group exercises by day of week
-function groupExercisesByDay(
-  exercises: ExerciseData[]
-): Map<number, ExerciseData[]> {
-  const grouped = new Map<number, ExerciseData[]>();
-
-  exercises.forEach((exercise) => {
-    if (!grouped.has(exercise.dayOfWeek)) {
-      grouped.set(exercise.dayOfWeek, []);
-    }
-
-    grouped.get(exercise.dayOfWeek)?.push(exercise);
-  });
-
-  // Sort exercises by order within each day
-  for (const [day, exs] of grouped.entries()) {
-    grouped.set(
-      day,
-      exs.sort((a, b) => a.order - b.order)
-    );
-  }
-
-  return grouped;
-}
-
-// Convert day number to day name
-function getDayName(day: number): string {
-  const days = [
-    'Sunday',
-    'Monday',
-    'Tuesday',
-    'Wednesday',
-    'Thursday',
-    'Friday',
-    'Saturday',
-  ];
-  return days[day % 7];
-}
-
-export default function PlanSummaryScreen() {
-  const navigation = useNavigation<PlanSummaryScreenNavigationProp>();
-  const route = useRoute<PlanSummaryScreenRouteProp>();
-  const { plan } = route.params;
-
-  const groupedExercises = groupExercisesByDay(plan.exercises);
-  const dayNumbers = Array.from(groupedExercises.keys()).sort();
-
-  return (
-    <ScrollView className='flex-1 bg-background'>
-      <View className='p-4'>
-        <View className='mb-4'>
-          <Text className='text-3xl font-bold text-primary'>{plan.name}</Text>
-          {plan.description ? (
-            <Text className='text-text-muted mt-1'>{plan.description}</Text>
-          ) : null}
-        </View>
-
-        <View className='bg-white rounded-xl p-5 shadow-md mb-6'>
-          <Text className='text-xl font-semibold text-text mb-2'>
-            Plan Overview
-          </Text>
-          <Text className='text-text'>
-            {dayNumbers.length} training days per week
-          </Text>
-          <Text className='text-text'>
-            {plan.exercises.length} total exercises
-          </Text>
-          <Text className='text-text'>
-            Created: {new Date(plan.createdAt).toLocaleDateString()}
-          </Text>
-        </View>
-
-        {dayNumbers.length > 0 ? (
-          dayNumbers.map((day) => (
-            <View key={day} className='mb-6'>
-              <Text className='text-xl font-bold text-primary mb-2'>
-                Day {day}: {getDayName(day)}
-              </Text>
-
-              <FlatList
-                data={groupedExercises.get(day)}
-                keyExtractor={(item) => item.id}
-                renderItem={({ item }) => <ExerciseCard exercise={item} />}
-                scrollEnabled={false}
-                ItemSeparatorComponent={() => <View className='h-2' />}
-              />
-            </View>
-          ))
-        ) : (
-          <View className='bg-white rounded-xl p-5 shadow-md'>
-            <Text className='text-text text-center'>
-              No exercises found in this plan. Try generating a new plan.
-            </Text>
-          </View>
-        )}
-
-        <View className='mt-4 mb-8'>
-          <TouchableOpacity
-            className='bg-primary p-4 rounded-lg mb-3'
-            onPress={() => navigation.navigate('Home')}>
-            <Text className='text-white font-semibold text-center'>
-              Back to Home
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    </ScrollView>
-  );
-}
-</file>
-
 <file path="mobile/src/screens/ProfileScreen.tsx">
 import React from 'react';
 import { View, Text, TouchableOpacity, ScrollView } from 'react-native';
@@ -5025,1291 +4570,6 @@ export default function ProfileScreen() {
     </ScrollView>
   );
 }
-</file>
-
-<file path="mobile/src/screens/ProgressAnalysisScreen.tsx">
-import React, { useState, useEffect, useCallback } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  ActivityIndicator,
-  RefreshControl,
-  SafeAreaView,
-  Alert,
-} from 'react-native';
-import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-
-import { RootStackParamList } from '../navigation';
-import { useAuth } from '../context/AuthContext';
-import {
-  getProgressionSuggestions,
-  ProgressionSuggestionsResponse,
-  ExerciseModificationSuggestion,
-} from '../services/progressService';
-
-// Card component for modified exercises
-interface SuggestionCardProps {
-  suggestion: ExerciseModificationSuggestion;
-  isDeloadRecommended: boolean;
-}
-
-function SuggestionCard({
-  suggestion,
-  isDeloadRecommended,
-}: SuggestionCardProps) {
-  const [isExpanded, setIsExpanded] = useState(false);
-
-  return (
-    <TouchableOpacity
-      style={styles.suggestionCard}
-      onPress={() => setIsExpanded(!isExpanded)}
-      activeOpacity={0.8}>
-      <View style={styles.cardHeader}>
-        <Text style={styles.exerciseName}>{suggestion.exercise_id}</Text>
-        {suggestion.replace_with && (
-          <View style={styles.replaceBadge}>
-            <Text style={styles.replaceBadgeText}>Replace</Text>
-          </View>
-        )}
-        {isDeloadRecommended && (
-          <View style={styles.deloadBadge}>
-            <Text style={styles.deloadBadgeText}>Deload</Text>
-          </View>
-        )}
-      </View>
-
-      <Text style={styles.suggestionText}>{suggestion.suggestion}</Text>
-
-      {isExpanded && (
-        <View style={styles.cardDetails}>
-          {suggestion.new_weight && (
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Recommended Weight:</Text>
-              <Text style={styles.detailValue}>{suggestion.new_weight} kg</Text>
-            </View>
-          )}
-          {suggestion.replace_with && (
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Replace With:</Text>
-              <Text style={styles.detailValue}>{suggestion.replace_with}</Text>
-            </View>
-          )}
-        </View>
-      )}
-
-      <Text style={styles.expandHint}>
-        {isExpanded ? 'Tap to collapse' : 'Tap to expand'}
-      </Text>
-    </TouchableOpacity>
-  );
-}
-
-type ProgressAnalysisScreenRouteProp = RouteProp<
-  RootStackParamList,
-  'ProgressAnalysis'
->;
-
-type ProgressAnalysisScreenNavigationProp = NativeStackNavigationProp<
-  RootStackParamList,
-  'ProgressAnalysis'
->;
-
-export default function ProgressAnalysisScreen() {
-  const navigation = useNavigation<ProgressAnalysisScreenNavigationProp>();
-  const route = useRoute<ProgressAnalysisScreenRouteProp>();
-  const { user } = useAuth();
-
-  const [analysis, setAnalysis] =
-    useState<ProgressionSuggestionsResponse | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  // Use the most active training plan or the one from route params
-  const trainingPlanId = route.params?.trainingPlanId || '';
-
-  // Function to fetch progression suggestions from API
-  const fetchAnalysis = useCallback(
-    async (isRefresh = false) => {
-      if (!user) return;
-
-      try {
-        if (!isRefresh) setIsLoading(true);
-        setError(null);
-
-        // Check if we have a training plan ID
-        if (!trainingPlanId) {
-          throw new Error('No training plan selected');
-        }
-
-        const response = await getProgressionSuggestions({
-          userId: user.id,
-          trainingPlanId,
-        });
-
-        setAnalysis(response);
-      } catch (err: any) {
-        setError(err.message || 'Failed to fetch analysis');
-        console.error('Error fetching progression suggestions:', err);
-      } finally {
-        setIsLoading(false);
-        if (isRefresh) setIsRefreshing(false);
-      }
-    },
-    [user, trainingPlanId]
-  );
-
-  // Initial data load
-  useEffect(() => {
-    fetchAnalysis();
-  }, [fetchAnalysis]);
-
-  // Handle refresh
-  const handleRefresh = useCallback(() => {
-    setIsRefreshing(true);
-    fetchAnalysis(true);
-  }, [fetchAnalysis]);
-
-  // Handle regeneration of analysis
-  const handleRegenerateAnalysis = () => {
-    Alert.alert(
-      'Regenerate Analysis',
-      'This will request a new AI analysis of your recent progress. Continue?',
-      [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
-        {
-          text: 'Regenerate',
-          onPress: () => fetchAnalysis(),
-        },
-      ]
-    );
-  };
-
-  // Loading state
-  if (isLoading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size='large' color='#3B82F6' />
-        <Text style={styles.loadingText}>
-          Analyzing your progress data with AI...
-        </Text>
-      </View>
-    );
-  }
-
-  // Error state
-  if (error) {
-    return (
-      <View style={styles.errorContainer}>
-        <Text style={styles.errorTitle}>Analysis Error</Text>
-        <Text style={styles.errorText}>{error}</Text>
-        <TouchableOpacity style={styles.button} onPress={() => fetchAnalysis()}>
-          <Text style={styles.buttonText}>Try Again</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  }
-
-  // Empty state - No analysis data
-  if (!analysis) {
-    return (
-      <ScrollView
-        contentContainerStyle={styles.emptyContainer}
-        refreshControl={
-          <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} />
-        }>
-        <Text style={styles.emptyTitle}>No Analysis Available</Text>
-        <Text style={styles.emptyText}>
-          We need more workout data to provide a meaningful analysis. Keep
-          logging your workouts!
-        </Text>
-        <TouchableOpacity
-          style={styles.button}
-          onPress={() => navigation.navigate('Progress')}>
-          <Text style={styles.buttonText}>Back to Progress</Text>
-        </TouchableOpacity>
-      </ScrollView>
-    );
-  }
-
-  // Format date for display
-  const analysisDate = new Date(analysis.generated_at).toLocaleDateString(
-    undefined,
-    {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    }
-  );
-
-  return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView
-        refreshControl={
-          <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} />
-        }>
-        {/* Header section */}
-        <View style={styles.headerContainer}>
-          <View style={styles.headerRow}>
-            <Text style={styles.title}>AI Progress Analysis</Text>
-            {analysis.deload_recommended && (
-              <View style={styles.deloadBadge}>
-                <Text style={styles.deloadBadgeText}>Deload Recommended</Text>
-              </View>
-            )}
-          </View>
-          <Text style={styles.subtitle}>
-            Generated on {analysisDate} · {analysis.model_used}
-          </Text>
-        </View>
-
-        {/* Summary section */}
-        <View style={styles.summaryContainer}>
-          <Text style={styles.sectionTitle}>Summary</Text>
-          <Text style={styles.summaryText}>{analysis.summary}</Text>
-        </View>
-
-        {/* Exercise suggestions section */}
-        <View style={styles.suggestionsContainer}>
-          <Text style={styles.sectionTitle}>Exercise Recommendations</Text>
-          {analysis.modified_exercises.length === 0 ? (
-            <Text style={styles.noSuggestionsText}>
-              No specific exercise recommendations at this time. Continue with
-              your current plan.
-            </Text>
-          ) : (
-            analysis.modified_exercises.map((suggestion, index) => (
-              <SuggestionCard
-                key={`${suggestion.exercise_id}-${index}`}
-                suggestion={suggestion}
-                isDeloadRecommended={analysis.deload_recommended}
-              />
-            ))
-          )}
-        </View>
-
-        {/* Regenerate button */}
-        <View style={styles.buttonContainer}>
-          <TouchableOpacity
-            style={styles.regenerateButton}
-            onPress={handleRegenerateAnalysis}>
-            <Text style={styles.buttonText}>Regenerate Analysis</Text>
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
-    </SafeAreaView>
-  );
-}
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F3F4F6',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#F3F4F6',
-    padding: 20,
-  },
-  loadingText: {
-    marginTop: 16,
-    fontSize: 16,
-    color: '#4B5563',
-    textAlign: 'center',
-  },
-  errorContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#F3F4F6',
-    padding: 20,
-  },
-  errorTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#EF4444',
-    marginBottom: 8,
-  },
-  errorText: {
-    textAlign: 'center',
-    fontSize: 16,
-    color: '#4B5563',
-    marginBottom: 24,
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  emptyTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: 10,
-  },
-  emptyText: {
-    fontSize: 16,
-    textAlign: 'center',
-    marginBottom: 20,
-    color: '#666',
-  },
-  headerContainer: {
-    padding: 16,
-    backgroundColor: 'white',
-    marginBottom: 12,
-    borderRadius: 8,
-    margin: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#111827',
-  },
-  subtitle: {
-    fontSize: 14,
-    color: '#6B7280',
-    marginTop: 4,
-  },
-  summaryContainer: {
-    padding: 16,
-    backgroundColor: 'white',
-    marginHorizontal: 16,
-    borderRadius: 8,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 8,
-    color: '#1F2937',
-  },
-  summaryText: {
-    fontSize: 16,
-    lineHeight: 24,
-    color: '#4B5563',
-  },
-  suggestionsContainer: {
-    padding: 16,
-    backgroundColor: 'white',
-    marginHorizontal: 16,
-    borderRadius: 8,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  suggestionCard: {
-    backgroundColor: '#F9FAFB',
-    borderRadius: 8,
-    padding: 16,
-    marginBottom: 12,
-    borderLeftWidth: 4,
-    borderLeftColor: '#3B82F6',
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  exerciseName: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#111827',
-    flex: 1,
-  },
-  suggestionText: {
-    fontSize: 14,
-    color: '#4B5563',
-    lineHeight: 20,
-  },
-  cardDetails: {
-    marginTop: 12,
-    backgroundColor: '#EFF6FF',
-    padding: 12,
-    borderRadius: 6,
-  },
-  detailRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 4,
-  },
-  detailLabel: {
-    fontSize: 14,
-    color: '#6B7280',
-  },
-  detailValue: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#1F2937',
-  },
-  expandHint: {
-    fontSize: 12,
-    color: '#9CA3AF',
-    textAlign: 'center',
-    marginTop: 8,
-  },
-  buttonContainer: {
-    padding: 16,
-    marginBottom: 24,
-  },
-  button: {
-    backgroundColor: '#3B82F6',
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 1.5,
-    elevation: 2,
-  },
-  buttonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  regenerateButton: {
-    backgroundColor: '#4F46E5',
-    paddingVertical: 14,
-    paddingHorizontal: 24,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 1.5,
-    elevation: 2,
-  },
-  deloadBadge: {
-    backgroundColor: '#FEF3C7',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 16,
-    marginLeft: 8,
-  },
-  deloadBadgeText: {
-    color: '#92400E',
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
-  replaceBadge: {
-    backgroundColor: '#DBEAFE',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 16,
-    marginLeft: 8,
-  },
-  replaceBadgeText: {
-    color: '#1E40AF',
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
-  noSuggestionsText: {
-    fontSize: 14,
-    color: '#6B7280',
-    fontStyle: 'italic',
-    textAlign: 'center',
-    marginTop: 8,
-  },
-});
-</file>
-
-<file path="mobile/src/screens/RegisterScreen.tsx">
-import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  ActivityIndicator,
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-} from 'react-native';
-import { useNavigation } from '@react-navigation/native';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-
-import { useAuth } from '../context/AuthContext';
-import { isValidEmail, isValidPassword } from '../utils/validation';
-import { RootStackParamList } from '../navigation';
-
-type RegisterScreenNavigationProp = NativeStackNavigationProp<
-  RootStackParamList,
-  'Register'
->;
-
-interface RegisterFormData {
-  email: string;
-  password: string;
-  confirmPassword: string;
-  firstName: string;
-  lastName: string;
-}
-
-interface FormErrors {
-  email?: string;
-  password?: string;
-  confirmPassword?: string;
-  firstName?: string;
-  lastName?: string;
-}
-
-export default function RegisterScreen() {
-  const navigation = useNavigation<RegisterScreenNavigationProp>();
-  const { register, isLoading, error, clearError } = useAuth();
-
-  const [formData, setFormData] = useState<RegisterFormData>({
-    email: '',
-    password: '',
-    confirmPassword: '',
-    firstName: '',
-    lastName: '',
-  });
-
-  const [formErrors, setFormErrors] = useState<FormErrors>({});
-
-  // Clear auth context errors when component unmounts
-  React.useEffect(() => {
-    return () => {
-      clearError();
-    };
-  }, [clearError]);
-
-  // Display auth error as an alert
-  React.useEffect(() => {
-    if (error) {
-      Alert.alert('Registration Error', error);
-    }
-  }, [error]);
-
-  function validateForm(): boolean {
-    const errors: FormErrors = {};
-    let isValid = true;
-
-    // Email validation
-    if (!formData.email) {
-      errors.email = 'Email is required';
-      isValid = false;
-    } else if (!isValidEmail(formData.email)) {
-      errors.email = 'Please enter a valid email';
-      isValid = false;
-    }
-
-    // Password validation
-    if (!formData.password) {
-      errors.password = 'Password is required';
-      isValid = false;
-    } else if (!isValidPassword(formData.password)) {
-      errors.password =
-        'Password must be at least 8 characters with uppercase, lowercase, and numbers';
-      isValid = false;
-    }
-
-    // Confirm password
-    if (!formData.confirmPassword) {
-      errors.confirmPassword = 'Please confirm your password';
-      isValid = false;
-    } else if (formData.password !== formData.confirmPassword) {
-      errors.confirmPassword = 'Passwords do not match';
-      isValid = false;
-    }
-
-    // Name validation
-    if (!formData.firstName) {
-      errors.firstName = 'First name is required';
-      isValid = false;
-    }
-
-    if (!formData.lastName) {
-      errors.lastName = 'Last name is required';
-      isValid = false;
-    }
-
-    setFormErrors(errors);
-    return isValid;
-  }
-
-  async function handleRegister() {
-    if (!validateForm()) return;
-
-    try {
-      await register({
-        email: formData.email,
-        password: formData.password,
-        firstName: formData.firstName,
-        lastName: formData.lastName,
-      });
-    } catch (err) {
-      // Error is handled by the AuthContext
-    }
-  }
-
-  function navigateToLogin() {
-    navigation.navigate('Login');
-  }
-
-  return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      className='flex-1 bg-background'>
-      <ScrollView contentContainerClassName='pb-10'>
-        <View className='p-6'>
-          <View className='mb-6'>
-            <Text className='text-3xl font-bold text-center text-primary'>
-              Create Account
-            </Text>
-            <Text className='text-base text-center text-text-muted mt-2'>
-              Join our fitness community and start your journey
-            </Text>
-          </View>
-
-          {/* Email Field */}
-          <View className='mb-4'>
-            <Text className='text-sm font-medium text-text mb-1'>Email</Text>
-            <TextInput
-              className={`bg-white p-3 rounded-lg border ${
-                formErrors.email ? 'border-red-500' : 'border-gray-200'
-              }`}
-              placeholder='your@email.com'
-              keyboardType='email-address'
-              autoCapitalize='none'
-              value={formData.email}
-              onChangeText={(text) => {
-                setFormData({ ...formData, email: text });
-                if (formErrors.email) {
-                  setFormErrors({ ...formErrors, email: undefined });
-                }
-              }}
-            />
-            {formErrors.email && (
-              <Text className='text-red-500 text-xs mt-1'>
-                {formErrors.email}
-              </Text>
-            )}
-          </View>
-
-          {/* First Name Field */}
-          <View className='mb-4'>
-            <Text className='text-sm font-medium text-text mb-1'>
-              First Name
-            </Text>
-            <TextInput
-              className={`bg-white p-3 rounded-lg border ${
-                formErrors.firstName ? 'border-red-500' : 'border-gray-200'
-              }`}
-              placeholder='John'
-              value={formData.firstName}
-              onChangeText={(text) => {
-                setFormData({ ...formData, firstName: text });
-                if (formErrors.firstName) {
-                  setFormErrors({ ...formErrors, firstName: undefined });
-                }
-              }}
-            />
-            {formErrors.firstName && (
-              <Text className='text-red-500 text-xs mt-1'>
-                {formErrors.firstName}
-              </Text>
-            )}
-          </View>
-
-          {/* Last Name Field */}
-          <View className='mb-4'>
-            <Text className='text-sm font-medium text-text mb-1'>
-              Last Name
-            </Text>
-            <TextInput
-              className={`bg-white p-3 rounded-lg border ${
-                formErrors.lastName ? 'border-red-500' : 'border-gray-200'
-              }`}
-              placeholder='Doe'
-              value={formData.lastName}
-              onChangeText={(text) => {
-                setFormData({ ...formData, lastName: text });
-                if (formErrors.lastName) {
-                  setFormErrors({ ...formErrors, lastName: undefined });
-                }
-              }}
-            />
-            {formErrors.lastName && (
-              <Text className='text-red-500 text-xs mt-1'>
-                {formErrors.lastName}
-              </Text>
-            )}
-          </View>
-
-          {/* Password Field */}
-          <View className='mb-4'>
-            <Text className='text-sm font-medium text-text mb-1'>Password</Text>
-            <TextInput
-              className={`bg-white p-3 rounded-lg border ${
-                formErrors.password ? 'border-red-500' : 'border-gray-200'
-              }`}
-              placeholder='Password'
-              secureTextEntry
-              value={formData.password}
-              onChangeText={(text) => {
-                setFormData({ ...formData, password: text });
-                if (formErrors.password) {
-                  setFormErrors({ ...formErrors, password: undefined });
-                }
-              }}
-            />
-            {formErrors.password && (
-              <Text className='text-red-500 text-xs mt-1'>
-                {formErrors.password}
-              </Text>
-            )}
-          </View>
-
-          {/* Confirm Password Field */}
-          <View className='mb-6'>
-            <Text className='text-sm font-medium text-text mb-1'>
-              Confirm Password
-            </Text>
-            <TextInput
-              className={`bg-white p-3 rounded-lg border ${
-                formErrors.confirmPassword
-                  ? 'border-red-500'
-                  : 'border-gray-200'
-              }`}
-              placeholder='Confirm Password'
-              secureTextEntry
-              value={formData.confirmPassword}
-              onChangeText={(text) => {
-                setFormData({ ...formData, confirmPassword: text });
-                if (formErrors.confirmPassword) {
-                  setFormErrors({ ...formErrors, confirmPassword: undefined });
-                }
-              }}
-            />
-            {formErrors.confirmPassword && (
-              <Text className='text-red-500 text-xs mt-1'>
-                {formErrors.confirmPassword}
-              </Text>
-            )}
-          </View>
-
-          {/* Register Button */}
-          <TouchableOpacity
-            className={`${isLoading ? 'bg-gray-400' : 'bg-primary'} p-4 rounded-lg mb-4`}
-            onPress={handleRegister}
-            disabled={isLoading}>
-            {isLoading ? (
-              <ActivityIndicator color='white' />
-            ) : (
-              <Text className='text-white font-semibold text-center'>
-                Create Account
-              </Text>
-            )}
-          </TouchableOpacity>
-
-          {/* Login Link */}
-          <View className='flex-row justify-center'>
-            <Text className='text-text-muted'>Already have an account? </Text>
-            <TouchableOpacity onPress={navigateToLogin}>
-              <Text className='text-primary font-medium'>Sign in</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
-  );
-}
-</file>
-
-<file path="mobile/src/screens/SessionFeedbackScreen.tsx">
-import React, { useState, useEffect, useCallback } from 'react';
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  ScrollView,
-  StyleSheet,
-  ActivityIndicator,
-  Alert,
-} from 'react-native';
-import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-
-import { RootStackParamList } from '../navigation';
-import { useAuth } from '../context/AuthContext';
-import grpcClient, {
-  ExerciseData,
-  ExerciseFeedback,
-  SubmitSessionFeedbackRequest,
-} from '../services/grpcClient';
-import ExerciseFeedbackForm, {
-  ExerciseFeedbackState,
-} from '../components/ExerciseFeedbackForm';
-
-type SessionFeedbackScreenNavigationProp = NativeStackNavigationProp<
-  RootStackParamList,
-  'SessionFeedback'
->;
-
-type SessionFeedbackScreenRouteProp = RouteProp<
-  RootStackParamList,
-  'SessionFeedback'
->;
-
-export default function SessionFeedbackScreen() {
-  const navigation = useNavigation<SessionFeedbackScreenNavigationProp>();
-  const route = useRoute<SessionFeedbackScreenRouteProp>();
-  const { user } = useAuth();
-
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [exercises, setExercises] = useState<ExerciseData[]>([]);
-  const [currentExerciseIndex, setCurrentExerciseIndex] = useState(0);
-  const [isReviewMode, setIsReviewMode] = useState(false);
-  const [formData, setFormData] = useState<
-    Record<string, ExerciseFeedbackState>
-  >({});
-  const [error, setError] = useState<string | null>(null);
-
-  // Fetch today's session data
-  useEffect(() => {
-    const fetchTodaySession = async () => {
-      if (!user) return;
-
-      try {
-        setIsLoading(true);
-        setError(null);
-
-        // If we have a sessionId in route params, we could use it instead
-        // of getting today's workout, but for now we'll use getTodaySession
-        const sessionData = await grpcClient.trainingService.getTodaySession(
-          user.id
-        );
-
-        if (sessionData.exercises.length === 0) {
-          setError('No exercises scheduled for today');
-        } else {
-          setExercises(sessionData.exercises);
-
-          // Initialize form data for each exercise
-          const initialFormData: Record<string, ExerciseFeedbackState> = {};
-          sessionData.exercises.forEach((exercise) => {
-            initialFormData[exercise.id] = {
-              exerciseId: exercise.id,
-              exerciseName: exercise.name,
-              completedSets: '',
-              reps: '',
-              weight: '',
-              rir: '',
-              notes: '',
-            };
-          });
-
-          setFormData(initialFormData);
-        }
-      } catch (err: any) {
-        setError(err.message || "Failed to load today's workout");
-        console.error('Error fetching today session:', err);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchTodaySession();
-  }, [user]);
-
-  // Handle form field changes
-  const handleFormChange = useCallback(
-    (
-      exerciseId: string,
-      field: keyof ExerciseFeedbackState,
-      value: string | number
-    ) => {
-      setFormData((prev) => ({
-        ...prev,
-        [exerciseId]: {
-          ...prev[exerciseId],
-          [field]: value,
-        },
-      }));
-    },
-    []
-  );
-
-  // Navigate to next exercise
-  const handleNext = useCallback(() => {
-    if (currentExerciseIndex < exercises.length - 1) {
-      setCurrentExerciseIndex((prev) => prev + 1);
-    } else {
-      setIsReviewMode(true);
-    }
-  }, [currentExerciseIndex, exercises.length]);
-
-  // Validate all form data
-  const validateFormData = useCallback((): boolean => {
-    for (const exerciseId in formData) {
-      const data = formData[exerciseId];
-
-      // Required fields: completedSets, reps, weight, rir
-      if (!data.completedSets || !data.reps || !data.weight || !data.rir) {
-        return false;
-      }
-
-      // Validate RIR (0-5)
-      const rirNum = parseInt(data.rir, 10);
-      if (isNaN(rirNum) || rirNum < 0 || rirNum > 5) {
-        return false;
-      }
-    }
-
-    return true;
-  }, [formData]);
-
-  // Submit feedback data
-  const handleSubmit = useCallback(async () => {
-    if (!user) {
-      setError('User authentication required');
-      return;
-    }
-
-    if (!validateFormData()) {
-      Alert.alert(
-        'Incomplete Information',
-        'Please fill in all required fields for each exercise (sets, reps, weight, and RIR).',
-        [{ text: 'OK' }]
-      );
-      return;
-    }
-
-    try {
-      setIsSubmitting(true);
-      setError(null);
-
-      // Format data for API request
-      const exercisesFeedback: ExerciseFeedback[] = Object.values(formData).map(
-        (data) => ({
-          exercise_name: data.exerciseName,
-          reps: data.reps,
-          weight: parseFloat(data.weight),
-          rir: parseInt(data.rir, 10),
-          notes: data.notes || '',
-        })
-      );
-
-      // Submit feedback
-      const request: SubmitSessionFeedbackRequest = {
-        user_id: user.id,
-        session_id: route.params?.sessionId || new Date().toISOString(),
-        exercises_feedback: exercisesFeedback,
-      };
-
-      const response =
-        await grpcClient.trainingService.submitSessionFeedback(request);
-
-      if (response.success) {
-        Alert.alert(
-          'Success',
-          'Your workout feedback has been submitted successfully!',
-          [
-            {
-              text: 'OK',
-              onPress: () => navigation.navigate('Home'),
-            },
-          ]
-        );
-      } else {
-        setError('Failed to submit workout feedback');
-      }
-    } catch (err: any) {
-      setError(err.message || 'Failed to submit workout feedback');
-      console.error('Error submitting session feedback:', err);
-
-      Alert.alert('Error', err.message || 'Failed to submit workout feedback', [
-        { text: 'OK' },
-      ]);
-    } finally {
-      setIsSubmitting(false);
-    }
-  }, [user, formData, route.params, navigation, validateFormData]);
-
-  // Go back to exercise editing mode
-  const handleEditExercises = useCallback(() => {
-    setIsReviewMode(false);
-    setCurrentExerciseIndex(0);
-  }, []);
-
-  if (isLoading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size='large' color='#3B82F6' />
-        <Text style={styles.loadingText}>Loading today's workout...</Text>
-      </View>
-    );
-  }
-
-  if (error && exercises.length === 0) {
-    return (
-      <View style={styles.errorContainer}>
-        <Text style={styles.errorTitle}>Oops!</Text>
-        <Text style={styles.errorText}>{error}</Text>
-        <TouchableOpacity
-          style={styles.button}
-          onPress={() => navigation.navigate('Home')}>
-          <Text style={styles.buttonText}>Back to Home</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  }
-
-  // Review mode shows all exercises
-  if (isReviewMode) {
-    return (
-      <ScrollView style={styles.container}>
-        <View style={styles.headerContainer}>
-          <Text style={styles.title}>Review Your Workout</Text>
-          <Text style={styles.subtitle}>
-            Please confirm your workout details below
-          </Text>
-        </View>
-
-        {exercises.map((exercise) => (
-          <View key={exercise.id} style={styles.reviewItem}>
-            <Text style={styles.reviewExerciseName}>{exercise.name}</Text>
-            <View style={styles.reviewDetails}>
-              <Text style={styles.reviewText}>
-                Sets: {formData[exercise.id]?.completedSets || '-'}
-              </Text>
-              <Text style={styles.reviewText}>
-                Reps: {formData[exercise.id]?.reps || '-'}
-              </Text>
-              <Text style={styles.reviewText}>
-                Weight: {formData[exercise.id]?.weight || '-'} kg
-              </Text>
-              <Text style={styles.reviewText}>
-                RIR: {formData[exercise.id]?.rir || '-'}
-              </Text>
-              {formData[exercise.id]?.notes ? (
-                <Text style={styles.reviewNotes}>
-                  Notes: {formData[exercise.id].notes}
-                </Text>
-              ) : null}
-            </View>
-          </View>
-        ))}
-
-        <View style={styles.buttonContainer}>
-          <TouchableOpacity
-            style={[styles.button, styles.secondaryButton]}
-            onPress={handleEditExercises}
-            disabled={isSubmitting}>
-            <Text style={styles.secondaryButtonText}>Edit</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.button}
-            onPress={handleSubmit}
-            disabled={isSubmitting}>
-            {isSubmitting ? (
-              <ActivityIndicator size='small' color='white' />
-            ) : (
-              <Text style={styles.buttonText}>Submit Workout</Text>
-            )}
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
-    );
-  }
-
-  // Show one exercise at a time
-  const currentExercise = exercises[currentExerciseIndex];
-
-  return (
-    <ScrollView style={styles.container}>
-      <View style={styles.headerContainer}>
-        <Text style={styles.title}>Today's Workout</Text>
-        <Text style={styles.subtitle}>
-          Exercise {currentExerciseIndex + 1} of {exercises.length}
-        </Text>
-      </View>
-
-      {currentExercise && (
-        <ExerciseFeedbackForm
-          exercise={currentExercise}
-          feedback={formData[currentExercise.id]}
-          onChange={handleFormChange}
-          isLast={currentExerciseIndex === exercises.length - 1}
-          onNext={handleNext}
-        />
-      )}
-
-      <View style={styles.progressContainer}>
-        <Text style={styles.progressText}>
-          {currentExerciseIndex + 1} / {exercises.length}
-        </Text>
-      </View>
-    </ScrollView>
-  );
-}
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F3F4F6',
-  },
-  headerContainer: {
-    padding: 16,
-    marginBottom: 8,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#111827',
-    marginBottom: 4,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#6B7280',
-  },
-  progressContainer: {
-    alignItems: 'center',
-    marginTop: 16,
-    marginBottom: 32,
-  },
-  progressText: {
-    fontSize: 16,
-    color: '#6B7280',
-    fontWeight: '500',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#F3F4F6',
-    padding: 20,
-  },
-  loadingText: {
-    marginTop: 16,
-    fontSize: 16,
-    color: '#4B5563',
-  },
-  errorContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#F3F4F6',
-    padding: 20,
-  },
-  errorTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#EF4444',
-    marginBottom: 8,
-  },
-  errorText: {
-    textAlign: 'center',
-    fontSize: 16,
-    color: '#4B5563',
-    marginBottom: 24,
-  },
-  button: {
-    backgroundColor: '#3B82F6',
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 1.5,
-    elevation: 2,
-    minWidth: 120,
-  },
-  buttonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  secondaryButton: {
-    backgroundColor: 'white',
-    borderWidth: 1,
-    borderColor: '#3B82F6',
-    marginRight: 12,
-  },
-  secondaryButtonText: {
-    color: '#3B82F6',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  buttonContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    marginVertical: 24,
-    paddingHorizontal: 16,
-  },
-  reviewItem: {
-    backgroundColor: 'white',
-    borderRadius: 12,
-    padding: 16,
-    marginHorizontal: 16,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 1,
-    elevation: 1,
-  },
-  reviewExerciseName: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#3B82F6',
-    marginBottom: 8,
-  },
-  reviewDetails: {
-    backgroundColor: '#F9FAFB',
-    padding: 12,
-    borderRadius: 8,
-  },
-  reviewText: {
-    fontSize: 16,
-    color: '#4B5563',
-    marginBottom: 4,
-  },
-  reviewNotes: {
-    fontSize: 16,
-    color: '#4B5563',
-    marginTop: 4,
-    fontStyle: 'italic',
-  },
-});
 </file>
 
 <file path="mobile/src/services/grpcHelpers.ts">
@@ -6537,37 +4797,6 @@ export function getValidationErrors(
 
   return errors;
 }
-</file>
-
-<file path="mobile/src/App.tsx">
-import React from 'react';
-import { StatusBar } from 'expo-status-bar';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { NavigationContainer } from '@react-navigation/native';
-
-// Import NativeWind setup
-import './utils/nativewind-setup';
-
-import { AuthProvider } from './context/AuthContext';
-import { TrainingProvider } from './context/TrainingContext';
-import Navigation from './navigation';
-
-function App() {
-  return (
-    <SafeAreaProvider>
-      <AuthProvider>
-        <TrainingProvider>
-          <NavigationContainer>
-            <Navigation />
-            <StatusBar style='auto' />
-          </NavigationContainer>
-        </TrainingProvider>
-      </AuthProvider>
-    </SafeAreaProvider>
-  );
-}
-
-export default App;
 </file>
 
 <file path="mobile/src/types.d.ts">
@@ -12468,199 +10697,6 @@ EXPOSE 3000
 CMD ["npm", "start"]
 </file>
 
-<file path="mobile/src/context/AuthContext.tsx">
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import grpcClient, { UserProfile, ProfileData } from '../services/grpcClient';
-
-// Auth storage keys
-const AUTH_TOKEN_KEY = '@fitness_app:auth_token';
-const USER_DATA_KEY = '@fitness_app:user_data';
-
-interface AuthContextType {
-  user: UserProfile | null;
-  token: string | null;
-  isAuthenticated: boolean;
-  isLoading: boolean;
-  error: string | null;
-  login: (email: string, password: string) => Promise<void>;
-  register: (data: RegisterData) => Promise<void>;
-  logout: () => Promise<void>;
-  clearError: () => void;
-  setUser: (user: UserProfile | null) => void;
-  setToken: (token: string | null) => void;
-}
-
-export interface RegisterData {
-  email: string;
-  password: string;
-  firstName: string;
-  lastName: string;
-  profileData?: ProfileData;
-}
-
-interface AuthProviderProps {
-  children: React.ReactNode;
-}
-
-const AuthContext = createContext<AuthContextType>({
-  user: null,
-  token: null,
-  isAuthenticated: false,
-  isLoading: true,
-  error: null,
-  login: async () => {},
-  register: async () => {},
-  logout: async () => {},
-  clearError: () => {},
-  setUser: () => {},
-  setToken: () => {},
-});
-
-export const useAuth = () => useContext(AuthContext);
-
-export function AuthProvider({ children }: AuthProviderProps) {
-  const [user, setUser] = useState<UserProfile | null>(null);
-  const [token, setToken] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  // Check if user is already logged in
-  useEffect(() => {
-    const checkAuthStatus = async () => {
-      try {
-        setIsLoading(true);
-
-        // Get stored auth data
-        const storedToken = await AsyncStorage.getItem(AUTH_TOKEN_KEY);
-        const storedUserData = await AsyncStorage.getItem(USER_DATA_KEY);
-
-        if (storedToken && storedUserData) {
-          // Set the auth token on the gRPC client
-          grpcClient.setAuthToken(storedToken);
-          setToken(storedToken);
-
-          // Parse and set the user data
-          const userData = JSON.parse(storedUserData) as UserProfile;
-          setUser(userData);
-        }
-      } catch (err) {
-        console.error('Authentication check failed:', err);
-        setError('Failed to restore authentication session');
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    checkAuthStatus();
-  }, []);
-
-  const storeAuthData = async (authToken: string, userData: UserProfile) => {
-    try {
-      await AsyncStorage.setItem(AUTH_TOKEN_KEY, authToken);
-      await AsyncStorage.setItem(USER_DATA_KEY, JSON.stringify(userData));
-
-      // Set token on the gRPC client for future authenticated requests
-      grpcClient.setAuthToken(authToken);
-      setToken(authToken);
-    } catch (err) {
-      console.error('Failed to store auth data:', err);
-      throw new Error('Failed to save authentication data');
-    }
-  };
-
-  const login = async (email: string, password: string) => {
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      // Call the gRPC service to authenticate
-      const response = await grpcClient.userService.authenticateUser({
-        email,
-        password,
-      });
-
-      // Store auth data
-      await storeAuthData(response.token, response.user);
-
-      // Update state
-      setUser(response.user);
-    } catch (err: any) {
-      console.error('Login failed:', err);
-      setError(err.message || 'Login failed. Please check your credentials.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const register = async (data: RegisterData) => {
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      // Call the gRPC service to create a user
-      const response = await grpcClient.userService.createUserProfile({
-        email: data.email,
-        password: data.password,
-        firstName: data.firstName,
-        lastName: data.lastName,
-        profileData: data.profileData || {},
-      });
-
-      // After successful registration, automatically log the user in
-      await login(data.email, data.password);
-    } catch (err: any) {
-      console.error('Registration failed:', err);
-      setError(err.message || 'Registration failed. Please try again.');
-      setIsLoading(false);
-    }
-  };
-
-  const logout = async () => {
-    setIsLoading(true);
-
-    try {
-      // Clear stored auth data
-      await AsyncStorage.removeItem(AUTH_TOKEN_KEY);
-      await AsyncStorage.removeItem(USER_DATA_KEY);
-
-      // Clear auth token from gRPC client
-      grpcClient.clearAuthToken();
-
-      // Update state
-      setUser(null);
-      setToken(null);
-    } catch (err) {
-      console.error('Logout failed:', err);
-      setError('Failed to logout properly');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const clearError = () => setError(null);
-
-  return (
-    <AuthContext.Provider
-      value={{
-        user,
-        token,
-        isAuthenticated: !!user,
-        isLoading,
-        error,
-        login,
-        register,
-        logout,
-        clearError,
-        setUser,
-        setToken,
-      }}>
-      {children}
-    </AuthContext.Provider>
-  );
-}
-</file>
-
 <file path="mobile/src/generated/training/training.ts">
 // Code generated by protoc-gen-ts_proto. DO NOT EDIT.
 // versions:
@@ -12834,6 +10870,18 @@ export interface ProgressionSuggestionsResponse {
   modifiedExercises: ExerciseModificationSuggestion[];
   generatedAt: string;
   modelUsed: string;
+}
+
+/** UpdateTrainingPlan request */
+export interface UpdateTrainingPlanRequest {
+  trainingPlanId: string;
+  updatedExercises: Exercise[];
+}
+
+/** UpdateTrainingPlan response */
+export interface UpdateTrainingPlanResponse {
+  success: boolean;
+  message: string;
 }
 
 function createBaseGeneratePlanRequest(): GeneratePlanRequest {
@@ -15052,6 +13100,160 @@ export const ProgressionSuggestionsResponse: MessageFns<ProgressionSuggestionsRe
   },
 };
 
+function createBaseUpdateTrainingPlanRequest(): UpdateTrainingPlanRequest {
+  return { trainingPlanId: "", updatedExercises: [] };
+}
+
+export const UpdateTrainingPlanRequest: MessageFns<UpdateTrainingPlanRequest> = {
+  encode(message: UpdateTrainingPlanRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.trainingPlanId !== "") {
+      writer.uint32(10).string(message.trainingPlanId);
+    }
+    for (const v of message.updatedExercises) {
+      Exercise.encode(v!, writer.uint32(18).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): UpdateTrainingPlanRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    let end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseUpdateTrainingPlanRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.trainingPlanId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.updatedExercises.push(Exercise.decode(reader, reader.uint32()));
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): UpdateTrainingPlanRequest {
+    return {
+      trainingPlanId: isSet(object.trainingPlanId) ? globalThis.String(object.trainingPlanId) : "",
+      updatedExercises: globalThis.Array.isArray(object?.updatedExercises)
+        ? object.updatedExercises.map((e: any) => Exercise.fromJSON(e))
+        : [],
+    };
+  },
+
+  toJSON(message: UpdateTrainingPlanRequest): unknown {
+    const obj: any = {};
+    if (message.trainingPlanId !== "") {
+      obj.trainingPlanId = message.trainingPlanId;
+    }
+    if (message.updatedExercises?.length) {
+      obj.updatedExercises = message.updatedExercises.map((e) => Exercise.toJSON(e));
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<UpdateTrainingPlanRequest>, I>>(base?: I): UpdateTrainingPlanRequest {
+    return UpdateTrainingPlanRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<UpdateTrainingPlanRequest>, I>>(object: I): UpdateTrainingPlanRequest {
+    const message = createBaseUpdateTrainingPlanRequest();
+    message.trainingPlanId = object.trainingPlanId ?? "";
+    message.updatedExercises = object.updatedExercises?.map((e) => Exercise.fromPartial(e)) || [];
+    return message;
+  },
+};
+
+function createBaseUpdateTrainingPlanResponse(): UpdateTrainingPlanResponse {
+  return { success: false, message: "" };
+}
+
+export const UpdateTrainingPlanResponse: MessageFns<UpdateTrainingPlanResponse> = {
+  encode(message: UpdateTrainingPlanResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.success !== false) {
+      writer.uint32(8).bool(message.success);
+    }
+    if (message.message !== "") {
+      writer.uint32(18).string(message.message);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): UpdateTrainingPlanResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    let end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseUpdateTrainingPlanResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.success = reader.bool();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.message = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): UpdateTrainingPlanResponse {
+    return {
+      success: isSet(object.success) ? globalThis.Boolean(object.success) : false,
+      message: isSet(object.message) ? globalThis.String(object.message) : "",
+    };
+  },
+
+  toJSON(message: UpdateTrainingPlanResponse): unknown {
+    const obj: any = {};
+    if (message.success !== false) {
+      obj.success = message.success;
+    }
+    if (message.message !== "") {
+      obj.message = message.message;
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<UpdateTrainingPlanResponse>, I>>(base?: I): UpdateTrainingPlanResponse {
+    return UpdateTrainingPlanResponse.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<UpdateTrainingPlanResponse>, I>>(object: I): UpdateTrainingPlanResponse {
+    const message = createBaseUpdateTrainingPlanResponse();
+    message.success = object.success ?? false;
+    message.message = object.message ?? "";
+    return message;
+  },
+};
+
 export interface TrainingService {
   /** Generate a training plan */
   GenerateTrainingPlan(request: GeneratePlanRequest): Promise<TrainingPlanResponse>;
@@ -15065,6 +13267,8 @@ export interface TrainingService {
   SubmitSessionFeedback(request: SubmitSessionFeedbackRequest): Promise<SubmitSessionFeedbackResponse>;
   /** Generate progression suggestions */
   GenerateProgressionSuggestions(request: ProgressionSuggestionsRequest): Promise<ProgressionSuggestionsResponse>;
+  /** Update training plan exercises */
+  UpdateTrainingPlan(request: UpdateTrainingPlanRequest): Promise<UpdateTrainingPlanResponse>;
 }
 
 export const TrainingServiceServiceName = "training.TrainingService";
@@ -15080,6 +13284,7 @@ export class TrainingServiceClientImpl implements TrainingService {
     this.GetUserProgress = this.GetUserProgress.bind(this);
     this.SubmitSessionFeedback = this.SubmitSessionFeedback.bind(this);
     this.GenerateProgressionSuggestions = this.GenerateProgressionSuggestions.bind(this);
+    this.UpdateTrainingPlan = this.UpdateTrainingPlan.bind(this);
   }
   GenerateTrainingPlan(request: GeneratePlanRequest): Promise<TrainingPlanResponse> {
     const data = GeneratePlanRequest.encode(request).finish();
@@ -15116,6 +13321,12 @@ export class TrainingServiceClientImpl implements TrainingService {
     const promise = this.rpc.request(this.service, "GenerateProgressionSuggestions", data);
     return promise.then((data) => ProgressionSuggestionsResponse.decode(new BinaryReader(data)));
   }
+
+  UpdateTrainingPlan(request: UpdateTrainingPlanRequest): Promise<UpdateTrainingPlanResponse> {
+    const data = UpdateTrainingPlanRequest.encode(request).finish();
+    const promise = this.rpc.request(this.service, "UpdateTrainingPlan", data);
+    return promise.then((data) => UpdateTrainingPlanResponse.decode(new BinaryReader(data)));
+  }
 }
 
 interface Rpc {
@@ -15148,90 +13359,746 @@ export interface MessageFns<T> {
 }
 </file>
 
-<file path="mobile/src/screens/ProgressScreen.tsx">
-import React, { useState, useEffect, useCallback } from 'react';
+<file path="mobile/src/screens/GeneratePlanScreen.tsx">
+import React, { useState } from 'react';
 import {
   View,
   Text,
-  StyleSheet,
+  TextInput,
+  TouchableOpacity,
   ScrollView,
   ActivityIndicator,
-  TouchableOpacity,
-  RefreshControl,
-  SafeAreaView,
+  Alert,
+  Switch,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 import { RootStackParamList } from '../navigation';
 import { useAuth } from '../context/AuthContext';
-import grpcClient, {
-  ExerciseLog,
-  GetUserExerciseLogsRequest,
-} from '../services/grpcClient';
-import { ExerciseChart } from '../components/ExerciseChart';
+import { useTraining } from '../context/TrainingContext';
+import grpcClient, { TrainingPlanRequest } from '../services/grpcClient';
 
-// Time range options for filtering
-const TIME_RANGES = [
-  { label: '7D', days: 7 },
-  { label: '30D', days: 30 },
-  { label: '90D', days: 90 },
-  { label: 'All', days: 365 },
-];
-
-// Metric options for viewing
-const METRICS: { label: string; value: 'weight' | 'rir' }[] = [
-  { label: 'Weight', value: 'weight' },
-  { label: 'RIR', value: 'rir' },
-];
-
-type ProgressScreenNavigationProp = NativeStackNavigationProp<
+type GeneratePlanScreenNavigationProp = NativeStackNavigationProp<
   RootStackParamList,
-  'Progress'
+  'GeneratePlan'
 >;
 
-export default function ProgressScreen() {
-  const navigation = useNavigation<ProgressScreenNavigationProp>();
-  const { user } = useAuth();
+// Focus areas matching the expected interface
+const FOCUS_AREAS = ['general', 'strength', 'hypertrophy', 'performance'];
 
+export default function GeneratePlanScreen() {
+  const navigation = useNavigation<GeneratePlanScreenNavigationProp>();
+  const { user } = useAuth();
+  const { setTrainingPlan } = useTraining();
+
+  // Form state
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const [daysPerWeek, setDaysPerWeek] = useState('3');
+  const [focusArea, setFocusArea] = useState(FOCUS_AREAS[0]);
+  const [sessionDuration, setSessionDuration] = useState('45');
+  const [includeWarmup, setIncludeWarmup] = useState(true);
+  const [includeCooldown, setIncludeCooldown] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
+  const [selectedFocusArea, setSelectedFocusArea] = useState(FOCUS_AREAS[0]);
+
+  // Validation
+  const isFormValid = () => {
+    return (
+      name.trim() !== '' &&
+      !isNaN(parseInt(daysPerWeek)) &&
+      parseInt(daysPerWeek) > 0 &&
+      parseInt(daysPerWeek) <= 7 &&
+      focusArea !== '' &&
+      !isNaN(parseInt(sessionDuration)) &&
+      parseInt(sessionDuration) > 0
+    );
+  };
+
+  // Handle focus area selection
+  const selectFocusArea = (area: string) => {
+    setFocusArea(area);
+    setSelectedFocusArea(area);
+  };
+
+  // Handle form submission
+  const handleGeneratePlan = async () => {
+    if (!user?.id) {
+      Alert.alert('Error', 'You must be logged in to generate a training plan');
+      return;
+    }
+
+    if (!isFormValid()) {
+      Alert.alert(
+        'Invalid Form',
+        'Please fill out all required fields correctly'
+      );
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      const request: TrainingPlanRequest = {
+        userId: user.id,
+        name,
+        description,
+        daysPerWeek: parseInt(daysPerWeek),
+        focusArea,
+        sessionDuration: parseInt(sessionDuration),
+        includeWarmup,
+        includeCooldown,
+      };
+
+      const trainingPlan =
+        await grpcClient.trainingService.generateTrainingPlan(request);
+
+      // Save plan to context if available
+      setTrainingPlan(trainingPlan);
+
+      // Navigate to the summary screen with the generated plan
+      navigation.navigate('PlanSummary', { plan: trainingPlan });
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'Failed to generate training plan');
+      console.error('Failed to generate plan:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <ScrollView className='flex-1 bg-background'>
+      <View className='p-4'>
+        <Text className='text-2xl font-bold text-primary mb-4'>
+          Create Training Plan
+        </Text>
+
+        <View className='bg-white rounded-xl p-5 shadow-md mb-4'>
+          <Text className='text-lg font-medium text-text mb-1'>Plan Name*</Text>
+          <TextInput
+            className='border border-gray-300 rounded-lg p-3 mb-4 text-text'
+            placeholder='My Training Plan'
+            value={name}
+            onChangeText={setName}
+          />
+
+          <Text className='text-lg font-medium text-text mb-1'>
+            Description
+          </Text>
+          <TextInput
+            className='border border-gray-300 rounded-lg p-3 mb-4 text-text'
+            placeholder='Optional plan description'
+            value={description}
+            onChangeText={setDescription}
+            multiline
+            numberOfLines={3}
+          />
+
+          <Text className='text-lg font-medium text-text mb-1'>
+            Days Per Week*
+          </Text>
+          <TextInput
+            className='border border-gray-300 rounded-lg p-3 mb-4 text-text'
+            placeholder='3'
+            value={daysPerWeek}
+            onChangeText={setDaysPerWeek}
+            keyboardType='numeric'
+          />
+
+          <Text className='text-lg font-medium text-text mb-1'>
+            Focus Area*
+          </Text>
+          <View className='flex-row flex-wrap mb-4'>
+            {FOCUS_AREAS.map((area) => (
+              <TouchableOpacity
+                key={area}
+                className={`m-1 px-3 py-2 rounded-lg ${
+                  focusArea === area ? 'bg-primary' : 'bg-gray-200'
+                }`}
+                onPress={() => selectFocusArea(area)}>
+                <Text
+                  className={`${
+                    focusArea === area ? 'text-white' : 'text-text'
+                  }`}>
+                  {area}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          <Text className='text-lg font-medium text-text mb-1'>
+            Session Duration (minutes)*
+          </Text>
+          <TextInput
+            className='border border-gray-300 rounded-lg p-3 mb-4 text-text'
+            placeholder='45'
+            value={sessionDuration}
+            onChangeText={setSessionDuration}
+            keyboardType='numeric'
+          />
+
+          <View className='flex-row items-center justify-between mb-4'>
+            <Text className='text-lg font-medium text-text'>
+              Include Warmup
+            </Text>
+            <Switch
+              value={includeWarmup}
+              onValueChange={setIncludeWarmup}
+              trackColor={{ false: '#ddd', true: '#3B82F6' }}
+            />
+          </View>
+
+          <View className='flex-row items-center justify-between mb-4'>
+            <Text className='text-lg font-medium text-text'>
+              Include Cooldown
+            </Text>
+            <Switch
+              value={includeCooldown}
+              onValueChange={setIncludeCooldown}
+              trackColor={{ false: '#ddd', true: '#3B82F6' }}
+            />
+          </View>
+
+          <TouchableOpacity
+            className={`p-4 rounded-lg ${
+              isFormValid() && !isLoading ? 'bg-primary' : 'bg-gray-300'
+            }`}
+            onPress={handleGeneratePlan}
+            disabled={!isFormValid() || isLoading}>
+            {isLoading ? (
+              <ActivityIndicator color='#fff' />
+            ) : (
+              <Text className='text-white font-semibold text-center'>
+                Generate Training Plan
+              </Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      </View>
+    </ScrollView>
+  );
+}
+</file>
+
+<file path="mobile/src/screens/LoginScreen.tsx">
+import React, { useState, useEffect } from 'react';
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+} from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+
+import { useAuth } from '../context/AuthContext';
+import { isValidEmail } from '../utils/validation';
+import { RootStackParamList } from '../navigation';
+
+type LoginScreenNavigationProp = NativeStackNavigationProp<
+  RootStackParamList,
+  'Login'
+>;
+
+interface LoginFormData {
+  email: string;
+  password: string;
+}
+
+interface FormErrors {
+  email?: string;
+  password?: string;
+}
+
+export default function LoginScreen() {
+  const navigation = useNavigation<LoginScreenNavigationProp>();
+  const { login, isLoading, isAuthenticated, error, clearError } = useAuth();
+
+  const [formData, setFormData] = useState<LoginFormData>({
+    email: '',
+    password: '',
+  });
+
+  const [formErrors, setFormErrors] = useState<FormErrors>({});
+
+  // Clear auth context errors when component unmounts
+  useEffect(() => {
+    return () => {
+      clearError();
+    };
+  }, [clearError]);
+
+  // Display auth error as an alert
+  useEffect(() => {
+    if (error) {
+      Alert.alert('Login Error', error);
+    }
+  }, [error]);
+
+  // Redirect to Home screen after successful authentication
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigation.navigate('Home');
+    }
+  }, [isAuthenticated, navigation]);
+
+  function validateForm(): boolean {
+    const errors: FormErrors = {};
+    let isValid = true;
+
+    // Email validation
+    if (!formData.email) {
+      errors.email = 'Email is required';
+      isValid = false;
+    } else if (!isValidEmail(formData.email)) {
+      errors.email = 'Please enter a valid email';
+      isValid = false;
+    }
+
+    // Password validation
+    if (!formData.password) {
+      errors.password = 'Password is required';
+      isValid = false;
+    }
+
+    setFormErrors(errors);
+    return isValid;
+  }
+
+  async function handleLogin() {
+    if (!validateForm()) return;
+
+    try {
+      await login(formData.email, formData.password);
+      // Note: Navigation is handled by the useEffect with isAuthenticated dependency
+    } catch (err) {
+      // Error is handled by the AuthContext
+      console.error('Login error:', err);
+    }
+  }
+
+  function navigateToRegister() {
+    navigation.navigate('Register');
+  }
+
+  return (
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      className='flex-1 bg-background'>
+      <ScrollView contentContainerClassName='flex-grow'>
+        <View className='flex-1 p-6 justify-center'>
+          <View className='mb-8'>
+            <Text className='text-3xl font-bold text-center text-primary'>
+              Welcome Back
+            </Text>
+            <Text className='text-base text-center text-text-muted mt-2'>
+              Sign in to continue to your fitness journey
+            </Text>
+          </View>
+
+          <View className='mb-6'>
+            <Text className='text-sm font-medium text-text mb-1'>Email</Text>
+            <TextInput
+              className={`bg-white p-3 rounded-lg border ${
+                formErrors.email ? 'border-red-500' : 'border-gray-200'
+              }`}
+              placeholder='your@email.com'
+              keyboardType='email-address'
+              autoCapitalize='none'
+              value={formData.email}
+              onChangeText={(text) => {
+                setFormData({ ...formData, email: text });
+                if (formErrors.email) {
+                  setFormErrors({ ...formErrors, email: undefined });
+                }
+              }}
+            />
+            {formErrors.email && (
+              <Text className='text-red-500 text-xs mt-1'>
+                {formErrors.email}
+              </Text>
+            )}
+          </View>
+
+          <View className='mb-8'>
+            <Text className='text-sm font-medium text-text mb-1'>Password</Text>
+            <TextInput
+              className={`bg-white p-3 rounded-lg border ${
+                formErrors.password ? 'border-red-500' : 'border-gray-200'
+              }`}
+              placeholder='Password'
+              secureTextEntry
+              value={formData.password}
+              onChangeText={(text) => {
+                setFormData({ ...formData, password: text });
+                if (formErrors.password) {
+                  setFormErrors({ ...formErrors, password: undefined });
+                }
+              }}
+            />
+            {formErrors.password && (
+              <Text className='text-red-500 text-xs mt-1'>
+                {formErrors.password}
+              </Text>
+            )}
+          </View>
+
+          <TouchableOpacity
+            className={`${isLoading ? 'bg-gray-400' : 'bg-primary'} p-4 rounded-lg mb-4`}
+            onPress={handleLogin}
+            disabled={isLoading}>
+            {isLoading ? (
+              <ActivityIndicator color='white' />
+            ) : (
+              <Text className='text-white font-semibold text-center'>
+                Sign In
+              </Text>
+            )}
+          </TouchableOpacity>
+
+          <View className='flex-row justify-center'>
+            <Text className='text-text-muted'>Don't have an account? </Text>
+            <TouchableOpacity onPress={navigateToRegister}>
+              <Text className='text-primary font-medium'>Sign up</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
+  );
+}
+</file>
+
+<file path="mobile/src/screens/PlanSummaryScreen.tsx">
+import React, { useState } from 'react';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  ScrollView,
+  FlatList,
+  ActivityIndicator,
+  Alert,
+} from 'react-native';
+import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+
+import { RootStackParamList } from '../navigation';
+import { ExerciseData } from '../services/grpcClient';
+import grpcClient from '../services/grpcClient';
+import ExerciseCard from '../components/ExerciseCard';
+import { useAuth } from '../context/AuthContext';
+
+type PlanSummaryScreenNavigationProp = NativeStackNavigationProp<
+  RootStackParamList,
+  'PlanSummary'
+>;
+
+type PlanSummaryScreenRouteProp = RouteProp<RootStackParamList, 'PlanSummary'>;
+
+// Group exercises by day of week
+function groupExercisesByDay(
+  exercises: ExerciseData[]
+): Map<number, ExerciseData[]> {
+  const grouped = new Map<number, ExerciseData[]>();
+
+  exercises.forEach((exercise) => {
+    if (!grouped.has(exercise.dayOfWeek)) {
+      grouped.set(exercise.dayOfWeek, []);
+    }
+
+    grouped.get(exercise.dayOfWeek)?.push(exercise);
+  });
+
+  // Sort exercises by order within each day
+  for (const [day, exs] of grouped.entries()) {
+    grouped.set(
+      day,
+      exs.sort((a, b) => a.order - b.order)
+    );
+  }
+
+  return grouped;
+}
+
+// Convert day number to day name
+function getDayName(day: number): string {
+  const days = [
+    'Sunday',
+    'Monday',
+    'Tuesday',
+    'Wednesday',
+    'Thursday',
+    'Friday',
+    'Saturday',
+  ];
+  return days[day % 7];
+}
+
+export default function PlanSummaryScreen() {
+  const navigation = useNavigation<PlanSummaryScreenNavigationProp>();
+  const route = useRoute<PlanSummaryScreenRouteProp>();
+  const { plan } = route.params;
+  const { user } = useAuth();
+  const [isLoading, setIsLoading] = useState(false);
+
+  const groupedExercises = groupExercisesByDay(plan.exercises);
+  const dayNumbers = Array.from(groupedExercises.keys()).sort();
+
+  const handleStartTodaySession = async () => {
+    if (!user?.id) {
+      Alert.alert('Error', 'User not authenticated');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const session = await grpcClient.trainingService.getTodaySession(user.id);
+      navigation.navigate('SessionFeedback', { sessionId: session.id });
+    } catch (error) {
+      console.error("Error fetching today's session:", error);
+      Alert.alert(
+        'Error',
+        "Unable to load today's session. Please try again later."
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <ScrollView className='flex-1 bg-background'>
+      <View className='p-4'>
+        <View className='mb-4'>
+          <Text className='text-3xl font-bold text-primary'>{plan.name}</Text>
+          {plan.description ? (
+            <Text className='text-text-muted mt-1'>{plan.description}</Text>
+          ) : null}
+        </View>
+
+        <View className='bg-white rounded-xl p-5 shadow-md mb-6'>
+          <Text className='text-xl font-semibold text-text mb-2'>
+            Plan Overview
+          </Text>
+          <Text className='text-text'>
+            {dayNumbers.length} training days per week
+          </Text>
+          <Text className='text-text'>
+            {plan.exercises.length} total exercises
+          </Text>
+          <Text className='text-text'>
+            Created: {new Date(plan.createdAt).toLocaleDateString()}
+          </Text>
+        </View>
+
+        {dayNumbers.length > 0 ? (
+          dayNumbers.map((day) => (
+            <View key={day} className='mb-6'>
+              <Text className='text-xl font-bold text-primary mb-2'>
+                Day {day}: {getDayName(day)}
+              </Text>
+
+              <FlatList
+                data={groupedExercises.get(day)}
+                keyExtractor={(item) => item.id}
+                renderItem={({ item }) => <ExerciseCard exercise={item} />}
+                scrollEnabled={false}
+                ItemSeparatorComponent={() => <View className='h-2' />}
+              />
+            </View>
+          ))
+        ) : (
+          <View className='bg-white rounded-xl p-5 shadow-md'>
+            <Text className='text-text text-center'>
+              No exercises found in this plan. Try generating a new plan.
+            </Text>
+          </View>
+        )}
+
+        <View className='mt-4 mb-8'>
+          <TouchableOpacity
+            className='bg-primary p-4 rounded-lg mb-3'
+            onPress={() => navigation.navigate('Home')}>
+            <Text className='text-white font-semibold text-center'>
+              Back to Home
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            className={`p-4 rounded-lg ${
+              isLoading ? 'bg-primary/50' : 'bg-accent'
+            }`}
+            onPress={handleStartTodaySession}
+            disabled={isLoading}>
+            {isLoading ? (
+              <View className='flex-row justify-center items-center'>
+                <ActivityIndicator color='white' size='small' />
+                <Text className='text-white font-semibold ml-2'>
+                  Loading session...
+                </Text>
+              </View>
+            ) : (
+              <Text className='text-white font-semibold text-center'>
+                Start Today's Session
+              </Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      </View>
+    </ScrollView>
+  );
+}
+</file>
+
+<file path="mobile/src/screens/ProgressAnalysisScreen.tsx">
+import React, { useState, useEffect, useCallback } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  ActivityIndicator,
+  RefreshControl,
+  SafeAreaView,
+  Alert,
+} from 'react-native';
+import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+
+import { RootStackParamList } from '../navigation';
+import { useAuth } from '../context/AuthContext';
+import { useTraining } from '../context/TrainingContext';
+import grpcClient, {
+  ProgressionSuggestionsRequest,
+  ProgressionSuggestionsResponse,
+  ExerciseModificationSuggestion,
+  ExerciseData,
+} from '../services/grpcClient';
+
+// Card component for modified exercises
+interface SuggestionCardProps {
+  suggestion: ExerciseModificationSuggestion;
+  isDeloadRecommended: boolean;
+}
+
+function SuggestionCard({
+  suggestion,
+  isDeloadRecommended,
+}: SuggestionCardProps) {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  // Determine suggestion type for badge display
+  const getSuggestionType = (): { type: string; color: string } => {
+    if (suggestion.replace_with) {
+      return { type: 'Replace', color: '#8B5CF6' }; // Purple for replacement
+    } else if (suggestion.new_weight) {
+      return { type: 'Adjust Weight', color: '#3B82F6' }; // Blue for weight adjustment
+    } else if (isDeloadRecommended) {
+      return { type: 'Deload', color: '#F59E0B' }; // Amber for deload
+    } else {
+      return { type: 'Technique', color: '#10B981' }; // Green for technique suggestions
+    }
+  };
+
+  const suggestionType = getSuggestionType();
+
+  return (
+    <TouchableOpacity
+      style={styles.suggestionCard}
+      onPress={() => setIsExpanded(!isExpanded)}
+      activeOpacity={0.8}>
+      <View style={styles.cardHeader}>
+        <Text style={styles.exerciseName}>{suggestion.exercise_id}</Text>
+        <View
+          style={[
+            styles.suggestionTypeBadge,
+            {
+              backgroundColor: suggestionType.color + '20', // Add transparency
+              borderColor: suggestionType.color,
+            },
+          ]}>
+          <Text
+            style={[
+              styles.suggestionTypeBadgeText,
+              { color: suggestionType.color },
+            ]}>
+            {suggestionType.type}
+          </Text>
+        </View>
+      </View>
+
+      <Text style={styles.suggestionText}>{suggestion.suggestion}</Text>
+
+      {isExpanded && (
+        <View style={styles.cardDetails}>
+          {suggestion.new_weight && (
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>New Target Weight:</Text>
+              <Text style={styles.detailValue}>{suggestion.new_weight} kg</Text>
+            </View>
+          )}
+          {suggestion.replace_with && (
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Replace With:</Text>
+              <Text style={styles.detailValue}>{suggestion.replace_with}</Text>
+            </View>
+          )}
+        </View>
+      )}
+
+      <View style={styles.cardFooter}>
+        <Text style={styles.expandHint}>
+          {isExpanded ? 'Tap to collapse' : 'Tap for details'}
+        </Text>
+      </View>
+    </TouchableOpacity>
+  );
+}
+
+type ProgressAnalysisScreenRouteProp = RouteProp<
+  RootStackParamList,
+  'ProgressAnalysis'
+>;
+
+type ProgressAnalysisScreenNavigationProp = NativeStackNavigationProp<
+  RootStackParamList,
+  'ProgressAnalysis'
+>;
+
+// Add this array before the ProgressAnalysisScreen component
+const HISTORY_WEEKS_OPTIONS = [
+  { label: '2 Weeks', value: 2 },
+  { label: '4 Weeks', value: 4 },
+  { label: '8 Weeks', value: 8 },
+  { label: '12 Weeks', value: 12 },
+];
+
+export default function ProgressAnalysisScreen() {
+  const navigation = useNavigation<ProgressAnalysisScreenNavigationProp>();
+  const route = useRoute<ProgressAnalysisScreenRouteProp>();
+  const { user } = useAuth();
+  const { trainingPlan, updateTrainingPlan } = useTraining();
+
+  const [analysis, setAnalysis] =
+    useState<ProgressionSuggestionsResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [exerciseLogs, setExerciseLogs] = useState<ExerciseLog[]>([]);
+  const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [selectedDays, setSelectedDays] = useState(30);
-  const [selectedMetric, setSelectedMetric] = useState<'weight' | 'rir'>(
-    'weight'
-  );
-  const [selectedExercise, setSelectedExercise] = useState<string | null>(null);
+  const [historyWeeks, setHistoryWeeks] = useState<number>(4); // Default to 4 weeks history
 
-  // Group logs by exercise name for easy access
-  const exerciseGroups = React.useMemo(() => {
-    const groups: { [key: string]: ExerciseLog[] } = {};
+  // Use the most active training plan or the one from route params
+  const trainingPlanId = route.params?.trainingPlanId || '';
 
-    exerciseLogs.forEach((log) => {
-      if (!groups[log.exercise_name]) {
-        groups[log.exercise_name] = [];
-      }
-      groups[log.exercise_name].push(log);
-    });
-
-    return groups;
-  }, [exerciseLogs]);
-
-  // Get list of unique exercise names
-  const exerciseNames = React.useMemo(() => {
-    return Object.keys(exerciseGroups).sort();
-  }, [exerciseGroups]);
-
-  // Set first exercise as selected if none is selected and we have data
-  useEffect(() => {
-    if (exerciseNames.length > 0 && !selectedExercise) {
-      setSelectedExercise(exerciseNames[0]);
-    }
-  }, [exerciseNames, selectedExercise]);
-
-  // Fetch data from API
-  const fetchExerciseLogs = useCallback(
+  // Function to fetch progression suggestions from API
+  const fetchAnalysis = useCallback(
     async (isRefresh = false) => {
       if (!user) return;
 
@@ -15239,49 +14106,152 @@ export default function ProgressScreen() {
         if (!isRefresh) setIsLoading(true);
         setError(null);
 
-        const request: GetUserExerciseLogsRequest = {
+        // Check if we have a training plan ID
+        if (!trainingPlanId) {
+          throw new Error('No training plan selected');
+        }
+
+        // Create the request object according to gRPC format
+        const request: ProgressionSuggestionsRequest = {
           user_id: user.id,
-          days: 365, // Get all data and filter client-side
+          training_plan_id: trainingPlanId,
+          history_weeks: historyWeeks,
         };
 
-        const response = await grpcClient.trainingService.getUserExerciseLogs(
-          request
-        );
-        setExerciseLogs(response.logs);
+        // Call the gRPC service directly
+        const response =
+          await grpcClient.trainingService.generateProgressionSuggestions(
+            request
+          );
+
+        setAnalysis(response);
       } catch (err: any) {
-        setError(err.message || 'Failed to load exercise data');
-        console.error('Error fetching exercise logs:', err);
+        setError(err.message || 'Failed to fetch analysis');
+        console.error('Error fetching progression suggestions:', err);
       } finally {
         setIsLoading(false);
         if (isRefresh) setIsRefreshing(false);
       }
     },
-    [user]
+    [user, trainingPlanId, historyWeeks]
   );
 
   // Initial data load
   useEffect(() => {
-    fetchExerciseLogs();
-  }, [fetchExerciseLogs]);
+    fetchAnalysis();
+  }, [fetchAnalysis]);
 
-  // Handle pull-to-refresh
+  // Handle refresh
   const handleRefresh = useCallback(() => {
     setIsRefreshing(true);
-    fetchExerciseLogs(true);
-  }, [fetchExerciseLogs]);
+    fetchAnalysis(true);
+  }, [fetchAnalysis]);
 
-  // Get logs for selected exercise
-  const selectedExerciseLogs = React.useMemo(() => {
-    if (!selectedExercise) return [];
-    return exerciseGroups[selectedExercise] || [];
-  }, [exerciseGroups, selectedExercise]);
+  // Handle regeneration of analysis
+  const handleRegenerateAnalysis = () => {
+    Alert.alert(
+      'Regenerate Analysis',
+      'This will request a new AI analysis of your recent progress. Continue?',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Regenerate',
+          onPress: () => fetchAnalysis(),
+        },
+      ]
+    );
+  };
+
+  // Function to apply the suggested changes to the training plan
+  const handleApplySuggestions = async () => {
+    if (!analysis || !trainingPlan) return;
+
+    // Confirmation alert
+    Alert.alert(
+      'Apply Suggestions',
+      'This will update your training plan with the recommended changes. Continue?',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Apply',
+          onPress: async () => {
+            try {
+              setIsSaving(true);
+
+              // Get the current exercises from the training plan
+              const currentExercises = [...trainingPlan.exercises];
+
+              // Apply the changes from the suggestions
+              analysis.modified_exercises.forEach((suggestion) => {
+                const exerciseIndex = currentExercises.findIndex(
+                  (ex) =>
+                    ex.id === suggestion.exercise_id ||
+                    ex.name === suggestion.exercise_id
+                );
+
+                if (exerciseIndex >= 0) {
+                  // Found the exercise to modify
+                  const exercise = currentExercises[exerciseIndex];
+
+                  // If there's a weight recommendation, update it
+                  if (suggestion.new_weight) {
+                    exercise.restTime = suggestion.new_weight; // Use restTime field to store weight
+                  }
+
+                  // If there's a replacement exercise, update the name
+                  if (suggestion.replace_with) {
+                    exercise.name = suggestion.replace_with;
+                  }
+
+                  // Update the exercise in the array
+                  currentExercises[exerciseIndex] = exercise;
+                }
+              });
+
+              // Call the updateTrainingPlan method
+              const result = await updateTrainingPlan(
+                trainingPlanId,
+                currentExercises
+              );
+
+              if (result?.success) {
+                Alert.alert(
+                  'Success',
+                  'Your training plan has been updated with the suggested changes.'
+                );
+              } else {
+                throw new Error(
+                  result?.message || 'Failed to update training plan'
+                );
+              }
+            } catch (err: any) {
+              Alert.alert(
+                'Error',
+                err.message || 'Failed to apply suggestions'
+              );
+            } finally {
+              setIsSaving(false);
+            }
+          },
+        },
+      ]
+    );
+  };
 
   // Loading state
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size='large' color='#3B82F6' />
-        <Text style={styles.loadingText}>Loading your progress data...</Text>
+        <Text style={styles.loadingText}>
+          Analyzing your progress data with AI...
+        </Text>
       </View>
     );
   }
@@ -15290,318 +14260,166 @@ export default function ProgressScreen() {
   if (error) {
     return (
       <View style={styles.errorContainer}>
-        <Text style={styles.errorTitle}>Oops!</Text>
+        <Text style={styles.errorTitle}>Analysis Error</Text>
         <Text style={styles.errorText}>{error}</Text>
-        <TouchableOpacity
-          style={styles.button}
-          onPress={() => fetchExerciseLogs()}>
+        <TouchableOpacity style={styles.button} onPress={() => fetchAnalysis()}>
           <Text style={styles.buttonText}>Try Again</Text>
         </TouchableOpacity>
       </View>
     );
   }
 
-  // Empty state
-  if (exerciseNames.length === 0) {
+  // Empty state - No analysis data
+  if (!analysis) {
     return (
       <ScrollView
         contentContainerStyle={styles.emptyContainer}
         refreshControl={
           <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} />
         }>
-        <Text style={styles.emptyTitle}>No Progress Data Yet</Text>
+        <Text style={styles.emptyTitle}>No Analysis Available</Text>
         <Text style={styles.emptyText}>
-          Complete workouts and log your exercises to see your progress over
-          time.
+          We need more workout data to provide a meaningful analysis. Keep
+          logging your workouts!
         </Text>
         <TouchableOpacity
           style={styles.button}
-          onPress={() => navigation.navigate('Home')}>
-          <Text style={styles.buttonText}>Go to Workouts</Text>
+          onPress={() => navigation.navigate('Progress')}>
+          <Text style={styles.buttonText}>Back to Progress</Text>
         </TouchableOpacity>
       </ScrollView>
     );
   }
 
+  // Format date for display
+  const analysisDate = new Date(analysis.generated_at).toLocaleDateString(
+    undefined,
+    {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    }
+  );
+
   return (
     <SafeAreaView style={styles.container}>
-      {/* Time range selector */}
-      <View style={styles.filterContainer}>
-        <View style={styles.filterRow}>
-          <Text style={styles.filterLabel}>Time Range:</Text>
-          <View style={styles.filterOptions}>
-            {TIME_RANGES.map((range) => (
-              <TouchableOpacity
-                key={range.label}
-                style={[
-                  styles.filterOption,
-                  selectedDays === range.days && styles.filterOptionSelected,
-                ]}
-                onPress={() => setSelectedDays(range.days)}>
-                <Text
-                  style={[
-                    styles.filterOptionText,
-                    selectedDays === range.days &&
-                      styles.filterOptionTextSelected,
-                  ]}>
-                  {range.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-
-        {/* Metric selector */}
-        <View style={styles.filterRow}>
-          <Text style={styles.filterLabel}>Metric:</Text>
-          <View style={styles.filterOptions}>
-            {METRICS.map((metric) => (
-              <TouchableOpacity
-                key={metric.label}
-                style={[
-                  styles.filterOption,
-                  selectedMetric === metric.value &&
-                    styles.filterOptionSelected,
-                ]}
-                onPress={() => setSelectedMetric(metric.value)}>
-                <Text
-                  style={[
-                    styles.filterOptionText,
-                    selectedMetric === metric.value &&
-                      styles.filterOptionTextSelected,
-                  ]}>
-                  {metric.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-      </View>
-
-      {/* Exercise selector and chart */}
       <ScrollView
+        contentContainerStyle={styles.scrollContent}
         refreshControl={
           <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} />
         }>
-        {/* Add AI Analysis button */}
-        <View style={styles.analysisButtonContainer}>
-          <TouchableOpacity
-            style={styles.analysisButton}
-            onPress={() =>
-              navigation.navigate('ProgressAnalysis', {
-                trainingPlanId: 'active-plan', // In a real app, use the active plan ID
-              })
-            }>
-            <Text style={styles.analysisButtonText}>
-              Get AI Progress Analysis
+        <View style={styles.header}>
+          <Text style={styles.title}>Progress Analysis</Text>
+          <Text style={styles.subtitle}>
+            AI-generated insights based on {historyWeeks} weeks of data
+          </Text>
+        </View>
+
+        {/* Summary card */}
+        <View style={styles.summaryCard}>
+          <Text style={styles.summaryTitle}>
+            {analysis.deload_recommended
+              ? '⚠️ Deload Recommended'
+              : '🎯 Progress Update'}
+          </Text>
+          <Text style={styles.summaryText}>{analysis.summary}</Text>
+          <View style={styles.generatedInfo}>
+            <Text style={styles.generatedText}>
+              Generated on:{' '}
+              {new Date(analysis.generated_at).toLocaleDateString()}
             </Text>
+            <Text style={styles.modelText}>Model: {analysis.model_used}</Text>
+          </View>
+        </View>
+
+        {/* Modified exercises section */}
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Suggested Adjustments</Text>
+          <Text style={styles.sectionSubtitle}>
+            {analysis.modified_exercises.length} exercise
+            {analysis.modified_exercises.length !== 1 ? 's' : ''} to modify
+          </Text>
+        </View>
+
+        {/* Exercise suggestion cards */}
+        {analysis.modified_exercises.map((suggestion, index) => (
+          <SuggestionCard
+            key={`${suggestion.exercise_id}-${index}`}
+            suggestion={suggestion}
+            isDeloadRecommended={analysis.deload_recommended}
+          />
+        ))}
+
+        {/* Action buttons */}
+        <View style={styles.actions}>
+          <TouchableOpacity
+            style={[styles.actionButton, styles.secondaryButton]}
+            onPress={handleRegenerateAnalysis}
+            disabled={isLoading || isSaving}>
+            <Text style={styles.actionButtonText}>Regenerate Analysis</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.actionButton,
+              styles.primaryButton,
+              (isLoading || isSaving) && styles.disabledButton,
+            ]}
+            onPress={handleApplySuggestions}
+            disabled={isLoading || isSaving}>
+            {isSaving ? (
+              <ActivityIndicator size='small' color='#fff' />
+            ) : (
+              <Text style={styles.actionButtonText}>Apply Suggestions</Text>
+            )}
           </TouchableOpacity>
         </View>
-
-        {/* Exercise selector */}
-        <View style={styles.exerciseSelector}>
-          <Text style={styles.sectionTitle}>Select Exercise:</Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.exerciseButtonsContainer}>
-            {exerciseNames.map((exerciseName) => (
-              <TouchableOpacity
-                key={exerciseName}
-                style={[
-                  styles.exerciseButton,
-                  selectedExercise === exerciseName &&
-                    styles.exerciseButtonSelected,
-                ]}
-                onPress={() => setSelectedExercise(exerciseName)}>
-                <Text
-                  style={[
-                    styles.exerciseButtonText,
-                    selectedExercise === exerciseName &&
-                      styles.exerciseButtonTextSelected,
-                  ]}>
-                  {exerciseName}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
-
-        {/* Show chart for selected exercise */}
-        {selectedExercise && (
-          <View style={styles.chartContainer}>
-            <ExerciseChart
-              exerciseLogs={selectedExerciseLogs}
-              metric={selectedMetric}
-              title={selectedExercise}
-              days={selectedDays}
-            />
-
-            {/* Summary stats */}
-            <View style={styles.statsContainer}>
-              <StatsCard
-                exerciseLogs={selectedExerciseLogs}
-                metric={selectedMetric}
-                days={selectedDays}
-              />
-            </View>
-          </View>
-        )}
       </ScrollView>
     </SafeAreaView>
-  );
-}
-
-// Simple stats component
-interface StatsCardProps {
-  exerciseLogs: ExerciseLog[];
-  metric: 'weight' | 'rir';
-  days: number;
-}
-
-function StatsCard({ exerciseLogs, metric, days }: StatsCardProps) {
-  // Filter logs by days
-  const filteredLogs = React.useMemo(() => {
-    if (!exerciseLogs.length) return [];
-
-    const now = new Date();
-    now.setHours(0, 0, 0, 0);
-
-    const cutoffDate = new Date();
-    cutoffDate.setDate(now.getDate() - days);
-    cutoffDate.setHours(0, 0, 0, 0);
-
-    return exerciseLogs.filter(
-      (log) => new Date(log.created_at).getTime() >= cutoffDate.getTime()
-    );
-  }, [exerciseLogs, days]);
-
-  if (filteredLogs.length === 0) {
-    return (
-      <View style={styles.statsCard}>
-        <Text style={styles.statsTitle}>Statistics</Text>
-        <Text style={styles.noStatsText}>
-          No data available for selected period
-        </Text>
-      </View>
-    );
-  }
-
-  // Get metric values
-  const values = filteredLogs.map((log) =>
-    metric === 'weight' ? log.weight : log.rir
-  );
-
-  // Calculate stats
-  const currentValue = values[values.length - 1];
-  const startingValue = values[0];
-  const maxValue = Math.max(...values);
-  const avgValue = values.reduce((a, b) => a + b, 0) / values.length;
-
-  // Calculate change
-  const change = currentValue - startingValue;
-  const changePercent =
-    startingValue !== 0 ? (change / startingValue) * 100 : 0;
-
-  // For RIR, lower is better. For weight, higher is better.
-  const isPositiveChange = metric === 'weight' ? change > 0 : change < 0;
-
-  return (
-    <View style={styles.statsCard}>
-      <Text style={styles.statsTitle}>Statistics</Text>
-      <View style={styles.statsGrid}>
-        <View style={styles.statItem}>
-          <Text style={styles.statLabel}>Current</Text>
-          <Text style={styles.statValue}>
-            {currentValue.toFixed(metric === 'weight' ? 1 : 0)}
-            {metric === 'weight' ? ' kg' : ''}
-          </Text>
-        </View>
-
-        <View style={styles.statItem}>
-          <Text style={styles.statLabel}>Starting</Text>
-          <Text style={styles.statValue}>
-            {startingValue.toFixed(metric === 'weight' ? 1 : 0)}
-            {metric === 'weight' ? ' kg' : ''}
-          </Text>
-        </View>
-
-        <View style={styles.statItem}>
-          <Text style={styles.statLabel}>Change</Text>
-          <Text
-            style={[
-              styles.statValue,
-              isPositiveChange ? styles.positiveChange : styles.negativeChange,
-            ]}>
-            {change > 0 ? '+' : ''}
-            {change.toFixed(metric === 'weight' ? 1 : 0)}
-            {metric === 'weight' ? ' kg' : ''}
-          </Text>
-        </View>
-
-        <View style={styles.statItem}>
-          <Text style={styles.statLabel}>Max</Text>
-          <Text style={styles.statValue}>
-            {maxValue.toFixed(metric === 'weight' ? 1 : 0)}
-            {metric === 'weight' ? ' kg' : ''}
-          </Text>
-        </View>
-
-        <View style={styles.statItem}>
-          <Text style={styles.statLabel}>Average</Text>
-          <Text style={styles.statValue}>
-            {avgValue.toFixed(metric === 'weight' ? 1 : 0)}
-            {metric === 'weight' ? ' kg' : ''}
-          </Text>
-        </View>
-
-        <View style={styles.statItem}>
-          <Text style={styles.statLabel}>Sessions</Text>
-          <Text style={styles.statValue}>{filteredLogs.length}</Text>
-        </View>
-      </View>
-    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#F3F4F6',
   },
   loadingContainer: {
     flex: 1,
-    alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#f5f5f5',
+    alignItems: 'center',
+    backgroundColor: '#F3F4F6',
+    padding: 20,
   },
   loadingText: {
-    marginTop: 10,
+    marginTop: 16,
     fontSize: 16,
-    color: '#666',
+    color: '#4B5563',
+    textAlign: 'center',
   },
   errorContainer: {
     flex: 1,
-    alignItems: 'center',
     justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F3F4F6',
     padding: 20,
-    backgroundColor: '#f5f5f5',
   },
   errorTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    marginBottom: 10,
+    color: '#EF4444',
+    marginBottom: 8,
   },
   errorText: {
-    fontSize: 16,
     textAlign: 'center',
-    marginBottom: 20,
-    color: '#666',
+    fontSize: 16,
+    color: '#4B5563',
+    marginBottom: 24,
   },
   emptyContainer: {
     flex: 1,
-    alignItems: 'center',
     justifyContent: 'center',
+    alignItems: 'center',
     padding: 20,
   },
   emptyTitle: {
@@ -15615,155 +14433,1088 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     color: '#666',
   },
-  button: {
-    backgroundColor: '#3B82F6',
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 8,
-  },
-  buttonText: {
-    color: 'white',
-    fontWeight: 'bold',
-    fontSize: 16,
-  },
-  filterContainer: {
+  header: {
+    padding: 16,
     backgroundColor: 'white',
-    padding: 15,
+    marginBottom: 12,
+    borderRadius: 8,
+    margin: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 2,
     elevation: 2,
   },
-  filterRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  filterLabel: {
-    width: 100,
-    fontSize: 16,
+  title: {
+    fontSize: 24,
     fontWeight: 'bold',
+    color: '#111827',
   },
-  filterOptions: {
-    flex: 1,
-    flexDirection: 'row',
-  },
-  filterOption: {
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 20,
-    marginRight: 8,
-    backgroundColor: '#f0f0f0',
-  },
-  filterOptionSelected: {
-    backgroundColor: '#3B82F6',
-  },
-  filterOptionText: {
+  subtitle: {
     fontSize: 14,
+    color: '#6B7280',
+    marginTop: 4,
   },
-  filterOptionTextSelected: {
-    color: 'white',
+  summaryCard: {
+    padding: 16,
+    backgroundColor: 'white',
+    marginHorizontal: 16,
+    borderRadius: 8,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  summaryTitle: {
+    fontSize: 18,
     fontWeight: 'bold',
+    marginBottom: 8,
+    color: '#1F2937',
   },
-  exerciseSelector: {
-    padding: 15,
+  summaryText: {
+    fontSize: 16,
+    lineHeight: 24,
+    color: '#4B5563',
+  },
+  generatedInfo: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  generatedText: {
+    fontSize: 14,
+    color: '#6B7280',
+  },
+  modelText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#111827',
+  },
+  sectionHeader: {
+    padding: 16,
+    backgroundColor: 'white',
+    marginTop: 16,
+    borderRadius: 8,
+    marginHorizontal: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
   },
   sectionTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    marginBottom: 10,
+    color: '#111827',
   },
-  exerciseButtonsContainer: {
-    paddingRight: 15,
-  },
-  exerciseButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    marginRight: 8,
-    backgroundColor: '#f0f0f0',
-  },
-  exerciseButtonSelected: {
-    backgroundColor: '#3B82F6',
-  },
-  exerciseButtonText: {
+  sectionSubtitle: {
     fontSize: 14,
+    color: '#6B7280',
+    marginTop: 4,
   },
-  exerciseButtonTextSelected: {
-    color: 'white',
-    fontWeight: 'bold',
-  },
-  chartContainer: {
-    paddingHorizontal: 15,
-    marginBottom: 20,
-  },
-  statsContainer: {
-    marginTop: 10,
-  },
-  statsCard: {
+  suggestionCard: {
     backgroundColor: 'white',
     borderRadius: 10,
-    padding: 15,
+    padding: 16,
+    marginBottom: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 2,
     elevation: 2,
   },
-  statsTitle: {
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  exerciseName: {
     fontSize: 16,
     fontWeight: 'bold',
-    marginBottom: 10,
+    flex: 1,
   },
-  statsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+  suggestionTypeBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 1,
   },
-  statItem: {
-    width: '33%',
+  suggestionTypeBadgeText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  suggestionText: {
+    fontSize: 14,
+    lineHeight: 20,
+    color: '#4B5563',
     marginBottom: 12,
   },
-  statLabel: {
-    fontSize: 12,
-    color: '#666',
+  cardDetails: {
+    backgroundColor: '#F9FAFB',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 12,
   },
-  statValue: {
+  detailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  detailLabel: {
+    fontSize: 14,
+    color: '#6B7280',
+  },
+  detailValue: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#111827',
+  },
+  cardFooter: {
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
+    paddingTop: 8,
+    alignItems: 'center',
+  },
+  expandHint: {
+    fontSize: 12,
+    color: '#6B7280',
+    textAlign: 'center',
+  },
+  buttonContainer: {
+    padding: 16,
+    marginBottom: 24,
+  },
+  button: {
+    backgroundColor: '#3B82F6',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 1.5,
+    elevation: 2,
+  },
+  buttonText: {
+    color: 'white',
     fontSize: 16,
     fontWeight: 'bold',
   },
-  positiveChange: {
-    color: '#22c55e',
-  },
-  negativeChange: {
-    color: '#ef4444',
-  },
-  noStatsText: {
-    color: '#666',
-    fontSize: 14,
-    fontStyle: 'italic',
-  },
-  analysisButtonContainer: {
-    padding: 15,
-    marginBottom: 5,
-  },
-  analysisButton: {
+  regenerateButton: {
     backgroundColor: '#4F46E5',
-    padding: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 24,
     borderRadius: 8,
     alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 1.5,
+    elevation: 2,
+  },
+  deloadBadge: {
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 16,
+    marginLeft: 8,
+  },
+  deloadBadgeText: {
+    color: '#92400E',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  replaceBadge: {
+    backgroundColor: '#DBEAFE',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 16,
+    marginLeft: 8,
+  },
+  replaceBadgeText: {
+    color: '#1E40AF',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  noSuggestionsText: {
+    fontSize: 14,
+    color: '#6B7280',
+    fontStyle: 'italic',
+    textAlign: 'center',
+    marginTop: 8,
+  },
+  deloadWarningContainer: {
+    backgroundColor: '#FEF3C7',
+    borderRadius: 8,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#F59E0B',
+  },
+  deloadWarningText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#B45309',
+    marginBottom: 8,
+  },
+  deloadWarningIcon: {
+    fontSize: 18,
+  },
+  deloadDescription: {
+    fontSize: 14,
+    color: '#78350F',
+    lineHeight: 20,
+  },
+  noSuggestionsContainer: {
+    backgroundColor: '#ECFDF5',
+    borderRadius: 8,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#10B981',
+  },
+  actions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    padding: 16,
+    marginHorizontal: 16,
+    marginTop: 24,
+  },
+  actionButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    minWidth: '45%',
+    alignItems: 'center',
+  },
+  actionButtonText: {
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
+  primaryButton: {
+    backgroundColor: '#3B82F6',
+  },
+  secondaryButton: {
+    backgroundColor: '#E5E7EB',
+  },
+  disabledButton: {
+    opacity: 0.5,
+  },
+  scrollContent: {
+    paddingBottom: 24,
+  },
+});
+</file>
+
+<file path="mobile/src/screens/RegisterScreen.tsx">
+import React, { useState, useEffect } from 'react';
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+} from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+
+import { useAuth } from '../context/AuthContext';
+import { isValidEmail, isValidPassword } from '../utils/validation';
+import { RootStackParamList } from '../navigation';
+
+type RegisterScreenNavigationProp = NativeStackNavigationProp<
+  RootStackParamList,
+  'Register'
+>;
+
+interface RegisterFormData {
+  email: string;
+  password: string;
+  confirmPassword: string;
+  firstName: string;
+  lastName: string;
+}
+
+interface FormErrors {
+  email?: string;
+  password?: string;
+  confirmPassword?: string;
+  firstName?: string;
+  lastName?: string;
+}
+
+export default function RegisterScreen() {
+  const navigation = useNavigation<RegisterScreenNavigationProp>();
+  const { register, isLoading, error, clearError, isAuthenticated } = useAuth();
+
+  const [formData, setFormData] = useState<RegisterFormData>({
+    email: '',
+    password: '',
+    confirmPassword: '',
+    firstName: '',
+    lastName: '',
+  });
+
+  const [formErrors, setFormErrors] = useState<FormErrors>({});
+
+  // Clear auth context errors when component unmounts
+  useEffect(() => {
+    return () => {
+      clearError();
+    };
+  }, [clearError]);
+
+  // Display auth error as an alert
+  useEffect(() => {
+    if (error) {
+      Alert.alert('Registration Error', error);
+    }
+  }, [error]);
+
+  // Redirect to Home screen after successful authentication
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigation.navigate('Home');
+    }
+  }, [isAuthenticated, navigation]);
+
+  function validateForm(): boolean {
+    const errors: FormErrors = {};
+    let isValid = true;
+
+    // Email validation
+    if (!formData.email) {
+      errors.email = 'Email is required';
+      isValid = false;
+    } else if (!isValidEmail(formData.email)) {
+      errors.email = 'Please enter a valid email';
+      isValid = false;
+    }
+
+    // Password validation
+    if (!formData.password) {
+      errors.password = 'Password is required';
+      isValid = false;
+    } else if (!isValidPassword(formData.password)) {
+      errors.password =
+        'Password must be at least 8 characters with uppercase, lowercase, and numbers';
+      isValid = false;
+    }
+
+    // Confirm password
+    if (!formData.confirmPassword) {
+      errors.confirmPassword = 'Please confirm your password';
+      isValid = false;
+    } else if (formData.password !== formData.confirmPassword) {
+      errors.confirmPassword = 'Passwords do not match';
+      isValid = false;
+    }
+
+    // Name validation
+    if (!formData.firstName) {
+      errors.firstName = 'First name is required';
+      isValid = false;
+    }
+
+    if (!formData.lastName) {
+      errors.lastName = 'Last name is required';
+      isValid = false;
+    }
+
+    setFormErrors(errors);
+    return isValid;
+  }
+
+  async function handleRegister() {
+    if (!validateForm()) return;
+
+    try {
+      await register({
+        email: formData.email,
+        password: formData.password,
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+      });
+    } catch (err) {
+      // Error is handled by the AuthContext
+    }
+  }
+
+  function navigateToLogin() {
+    navigation.navigate('Login');
+  }
+
+  return (
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      className='flex-1 bg-background'>
+      <ScrollView contentContainerClassName='pb-10'>
+        <View className='p-6'>
+          <View className='mb-6'>
+            <Text className='text-3xl font-bold text-center text-primary'>
+              Create Account
+            </Text>
+            <Text className='text-base text-center text-text-muted mt-2'>
+              Join our fitness community and start your journey
+            </Text>
+          </View>
+
+          {/* Email Field */}
+          <View className='mb-4'>
+            <Text className='text-sm font-medium text-text mb-1'>Email</Text>
+            <TextInput
+              className={`bg-white p-3 rounded-lg border ${
+                formErrors.email ? 'border-red-500' : 'border-gray-200'
+              }`}
+              placeholder='your@email.com'
+              keyboardType='email-address'
+              autoCapitalize='none'
+              value={formData.email}
+              onChangeText={(text) => {
+                setFormData({ ...formData, email: text });
+                if (formErrors.email) {
+                  setFormErrors({ ...formErrors, email: undefined });
+                }
+              }}
+            />
+            {formErrors.email && (
+              <Text className='text-red-500 text-xs mt-1'>
+                {formErrors.email}
+              </Text>
+            )}
+          </View>
+
+          {/* First Name Field */}
+          <View className='mb-4'>
+            <Text className='text-sm font-medium text-text mb-1'>
+              First Name
+            </Text>
+            <TextInput
+              className={`bg-white p-3 rounded-lg border ${
+                formErrors.firstName ? 'border-red-500' : 'border-gray-200'
+              }`}
+              placeholder='John'
+              value={formData.firstName}
+              onChangeText={(text) => {
+                setFormData({ ...formData, firstName: text });
+                if (formErrors.firstName) {
+                  setFormErrors({ ...formErrors, firstName: undefined });
+                }
+              }}
+            />
+            {formErrors.firstName && (
+              <Text className='text-red-500 text-xs mt-1'>
+                {formErrors.firstName}
+              </Text>
+            )}
+          </View>
+
+          {/* Last Name Field */}
+          <View className='mb-4'>
+            <Text className='text-sm font-medium text-text mb-1'>
+              Last Name
+            </Text>
+            <TextInput
+              className={`bg-white p-3 rounded-lg border ${
+                formErrors.lastName ? 'border-red-500' : 'border-gray-200'
+              }`}
+              placeholder='Doe'
+              value={formData.lastName}
+              onChangeText={(text) => {
+                setFormData({ ...formData, lastName: text });
+                if (formErrors.lastName) {
+                  setFormErrors({ ...formErrors, lastName: undefined });
+                }
+              }}
+            />
+            {formErrors.lastName && (
+              <Text className='text-red-500 text-xs mt-1'>
+                {formErrors.lastName}
+              </Text>
+            )}
+          </View>
+
+          {/* Password Field */}
+          <View className='mb-4'>
+            <Text className='text-sm font-medium text-text mb-1'>Password</Text>
+            <TextInput
+              className={`bg-white p-3 rounded-lg border ${
+                formErrors.password ? 'border-red-500' : 'border-gray-200'
+              }`}
+              placeholder='Password'
+              secureTextEntry
+              value={formData.password}
+              onChangeText={(text) => {
+                setFormData({ ...formData, password: text });
+                if (formErrors.password) {
+                  setFormErrors({ ...formErrors, password: undefined });
+                }
+              }}
+            />
+            {formErrors.password && (
+              <Text className='text-red-500 text-xs mt-1'>
+                {formErrors.password}
+              </Text>
+            )}
+          </View>
+
+          {/* Confirm Password Field */}
+          <View className='mb-6'>
+            <Text className='text-sm font-medium text-text mb-1'>
+              Confirm Password
+            </Text>
+            <TextInput
+              className={`bg-white p-3 rounded-lg border ${
+                formErrors.confirmPassword
+                  ? 'border-red-500'
+                  : 'border-gray-200'
+              }`}
+              placeholder='Confirm Password'
+              secureTextEntry
+              value={formData.confirmPassword}
+              onChangeText={(text) => {
+                setFormData({ ...formData, confirmPassword: text });
+                if (formErrors.confirmPassword) {
+                  setFormErrors({ ...formErrors, confirmPassword: undefined });
+                }
+              }}
+            />
+            {formErrors.confirmPassword && (
+              <Text className='text-red-500 text-xs mt-1'>
+                {formErrors.confirmPassword}
+              </Text>
+            )}
+          </View>
+
+          {/* Register Button */}
+          <TouchableOpacity
+            className={`${isLoading ? 'bg-gray-400' : 'bg-primary'} p-4 rounded-lg mb-4`}
+            onPress={handleRegister}
+            disabled={isLoading}>
+            {isLoading ? (
+              <ActivityIndicator color='white' />
+            ) : (
+              <Text className='text-white font-semibold text-center'>
+                Create Account
+              </Text>
+            )}
+          </TouchableOpacity>
+
+          {/* Login Link */}
+          <View className='flex-row justify-center'>
+            <Text className='text-text-muted'>Already have an account? </Text>
+            <TouchableOpacity onPress={navigateToLogin}>
+              <Text className='text-primary font-medium'>Sign in</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
+  );
+}
+</file>
+
+<file path="mobile/src/screens/SessionFeedbackScreen.tsx">
+import React, { useState, useEffect, useCallback } from 'react';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  FlatList,
+  StyleSheet,
+  ActivityIndicator,
+  Alert,
+} from 'react-native';
+import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+
+import { RootStackParamList } from '../navigation';
+import { useAuth } from '../context/AuthContext';
+import grpcClient, {
+  ExerciseData,
+  ExerciseFeedback,
+  SubmitSessionFeedbackRequest,
+} from '../services/grpcClient';
+import ExerciseFeedbackForm, {
+  ExerciseFeedbackState,
+} from '../components/ExerciseFeedbackForm';
+
+type SessionFeedbackScreenNavigationProp = NativeStackNavigationProp<
+  RootStackParamList,
+  'SessionFeedback'
+>;
+
+type SessionFeedbackScreenRouteProp = RouteProp<
+  RootStackParamList,
+  'SessionFeedback'
+>;
+
+export default function SessionFeedbackScreen() {
+  const navigation = useNavigation<SessionFeedbackScreenNavigationProp>();
+  const route = useRoute<SessionFeedbackScreenRouteProp>();
+  const { user } = useAuth();
+
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [exercises, setExercises] = useState<ExerciseData[]>([]);
+  const [formData, setFormData] = useState<
+    Record<string, ExerciseFeedbackState>
+  >({});
+  const [error, setError] = useState<string | null>(null);
+  const [isReviewMode, setIsReviewMode] = useState(false);
+
+  // Fetch session data using sessionId from route params if available
+  useEffect(() => {
+    const fetchSessionData = async () => {
+      if (!user) return;
+
+      try {
+        setIsLoading(true);
+        setError(null);
+
+        // Prioritize using sessionId from route params if available
+        const sessionId = route.params?.sessionId;
+        let sessionData;
+
+        if (sessionId) {
+          // Here you would ideally fetch the specific session by sessionId
+          // This is just a placeholder - implement the actual call based on your API
+          sessionData = await grpcClient.trainingService.getTodaySession(
+            user.id
+          );
+          // In a production app, you'd have something like:
+          // sessionData = await grpcClient.trainingService.getSessionById(sessionId);
+        } else {
+          // Fallback to getting today's session if no sessionId provided
+          sessionData = await grpcClient.trainingService.getTodaySession(
+            user.id
+          );
+        }
+
+        if (sessionData.exercises.length === 0) {
+          setError('No exercises found for this session');
+        } else {
+          setExercises(sessionData.exercises);
+
+          // Initialize form data for each exercise
+          const initialFormData: Record<string, ExerciseFeedbackState> = {};
+          sessionData.exercises.forEach((exercise) => {
+            initialFormData[exercise.id] = {
+              exerciseId: exercise.id,
+              exerciseName: exercise.name,
+              completedSets: '',
+              reps: '',
+              weight: '',
+              rir: '',
+              notes: '',
+            };
+          });
+
+          setFormData(initialFormData);
+        }
+      } catch (err: any) {
+        setError(err.message || 'Failed to load workout session');
+        console.error('Error fetching session data:', err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchSessionData();
+  }, [user, route.params]);
+
+  // Handle form field changes
+  const handleFormChange = useCallback(
+    (
+      exerciseId: string,
+      field: keyof ExerciseFeedbackState,
+      value: string | number
+    ) => {
+      setFormData((prev) => ({
+        ...prev,
+        [exerciseId]: {
+          ...prev[exerciseId],
+          [field]: value,
+        },
+      }));
+    },
+    []
+  );
+
+  // Validate all form data
+  const validateFormData = useCallback((): boolean => {
+    for (const exerciseId in formData) {
+      const data = formData[exerciseId];
+
+      // Required fields: completedSets, reps, weight, rir
+      if (!data.completedSets || !data.reps || !data.weight || !data.rir) {
+        return false;
+      }
+
+      // Validate RIR (0-5)
+      const rirNum = parseInt(data.rir, 10);
+      if (isNaN(rirNum) || rirNum < 0 || rirNum > 5) {
+        return false;
+      }
+    }
+
+    return true;
+  }, [formData]);
+
+  // Submit feedback data
+  const handleSubmit = useCallback(async () => {
+    if (!user) {
+      setError('User authentication required');
+      return;
+    }
+
+    if (!validateFormData()) {
+      Alert.alert(
+        'Incomplete Information',
+        'Please fill in all required fields for each exercise (sets, reps, weight, and RIR).',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      setError(null);
+
+      // Format data for API request
+      const exercisesFeedback: ExerciseFeedback[] = Object.values(formData).map(
+        (data) => ({
+          exercise_name: data.exerciseName,
+          reps: data.reps,
+          weight: parseFloat(data.weight),
+          rir: parseInt(data.rir, 10),
+          notes: data.notes || '',
+        })
+      );
+
+      // Submit feedback
+      const request: SubmitSessionFeedbackRequest = {
+        user_id: user.id,
+        session_id: route.params?.sessionId || new Date().toISOString(),
+        exercises_feedback: exercisesFeedback,
+      };
+
+      const response =
+        await grpcClient.trainingService.submitSessionFeedback(request);
+
+      if (response.success) {
+        Alert.alert(
+          'Success',
+          'Your workout feedback has been submitted successfully!',
+          [
+            {
+              text: 'OK',
+              onPress: () => navigation.navigate('Home'),
+            },
+          ]
+        );
+      } else {
+        setError('Failed to submit workout feedback');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Failed to submit workout feedback');
+      console.error('Error submitting session feedback:', err);
+
+      Alert.alert('Error', err.message || 'Failed to submit workout feedback', [
+        { text: 'OK' },
+      ]);
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, [user, formData, route.params, navigation, validateFormData]);
+
+  // Toggle review mode
+  const toggleReviewMode = useCallback(() => {
+    setIsReviewMode((prev) => !prev);
+  }, []);
+
+  // Render exercise item in the list
+  const renderExerciseItem = useCallback(
+    ({ item }: { item: ExerciseData }) => (
+      <ExerciseFeedbackForm
+        exercise={item}
+        feedback={formData[item.id]}
+        onChange={handleFormChange}
+        isLast={false}
+      />
+    ),
+    [formData, handleFormChange]
+  );
+
+  // Render review item in the list
+  const renderReviewItem = useCallback(
+    ({ item }: { item: ExerciseData }) => (
+      <View key={item.id} style={styles.reviewItem}>
+        <Text style={styles.reviewExerciseName}>{item.name}</Text>
+        <View style={styles.reviewDetails}>
+          <Text style={styles.reviewText}>
+            Sets: {formData[item.id]?.completedSets || '-'}
+          </Text>
+          <Text style={styles.reviewText}>
+            Reps: {formData[item.id]?.reps || '-'}
+          </Text>
+          <Text style={styles.reviewText}>
+            Weight: {formData[item.id]?.weight || '-'} kg
+          </Text>
+          <Text style={styles.reviewText}>
+            RIR: {formData[item.id]?.rir || '-'}
+          </Text>
+          {formData[item.id]?.notes ? (
+            <Text style={styles.reviewNotes}>
+              Notes: {formData[item.id].notes}
+            </Text>
+          ) : null}
+        </View>
+      </View>
+    ),
+    [formData]
+  );
+
+  if (isLoading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size='large' color='#3B82F6' />
+        <Text style={styles.loadingText}>Loading workout session...</Text>
+      </View>
+    );
+  }
+
+  if (error && exercises.length === 0) {
+    return (
+      <View style={styles.errorContainer}>
+        <Text style={styles.errorTitle}>Oops!</Text>
+        <Text style={styles.errorText}>{error}</Text>
+        <TouchableOpacity
+          style={styles.button}
+          onPress={() => navigation.navigate('Home')}>
+          <Text style={styles.buttonText}>Back to Home</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.container}>
+      <View style={styles.headerContainer}>
+        <Text style={styles.title}>
+          {isReviewMode ? 'Review Your Workout' : 'Session Feedback'}
+        </Text>
+        <Text style={styles.subtitle}>
+          {isReviewMode
+            ? 'Please confirm your workout details below'
+            : `Complete feedback for ${exercises.length} exercises`}
+        </Text>
+      </View>
+
+      <FlatList
+        data={exercises}
+        keyExtractor={(item) => item.id}
+        renderItem={isReviewMode ? renderReviewItem : renderExerciseItem}
+        contentContainerStyle={styles.listContainer}
+      />
+
+      <View style={styles.buttonContainer}>
+        {isReviewMode ? (
+          <>
+            <TouchableOpacity
+              style={[styles.button, styles.secondaryButton]}
+              onPress={toggleReviewMode}
+              disabled={isSubmitting}>
+              <Text style={styles.secondaryButtonText}>Edit</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.button}
+              onPress={handleSubmit}
+              disabled={isSubmitting}>
+              {isSubmitting ? (
+                <ActivityIndicator size='small' color='white' />
+              ) : (
+                <Text style={styles.buttonText}>Submit Workout</Text>
+              )}
+            </TouchableOpacity>
+          </>
+        ) : (
+          <TouchableOpacity style={styles.button} onPress={toggleReviewMode}>
+            <Text style={styles.buttonText}>Review All</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#F3F4F6',
+  },
+  headerContainer: {
+    padding: 16,
+    marginBottom: 8,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#111827',
+    marginBottom: 4,
+  },
+  subtitle: {
+    fontSize: 16,
+    color: '#6B7280',
+  },
+  listContainer: {
+    padding: 16,
+    paddingTop: 8,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F3F4F6',
+    padding: 20,
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#4B5563',
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F3F4F6',
+    padding: 20,
+  },
+  errorTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#EF4444',
+    marginBottom: 8,
+  },
+  errorText: {
+    textAlign: 'center',
+    fontSize: 16,
+    color: '#4B5563',
+    marginBottom: 24,
+  },
+  button: {
+    backgroundColor: '#3B82F6',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 1.5,
+    elevation: 2,
+    minWidth: 120,
+  },
+  buttonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  secondaryButton: {
+    backgroundColor: 'white',
+    borderWidth: 1,
+    borderColor: '#3B82F6',
+    marginRight: 12,
+  },
+  secondaryButtonText: {
+    color: '#3B82F6',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  buttonContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginVertical: 24,
+    paddingHorizontal: 16,
+  },
+  reviewItem: {
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    shadowRadius: 1,
+    elevation: 1,
   },
-  analysisButtonText: {
-    color: 'white',
+  reviewExerciseName: {
+    fontSize: 18,
     fontWeight: 'bold',
-    fontSize: 15,
+    color: '#3B82F6',
+    marginBottom: 8,
+  },
+  reviewDetails: {
+    backgroundColor: '#F9FAFB',
+    padding: 12,
+    borderRadius: 8,
+  },
+  reviewText: {
+    fontSize: 16,
+    color: '#4B5563',
+    marginBottom: 4,
+  },
+  reviewNotes: {
+    fontSize: 16,
+    color: '#4B5563',
+    marginTop: 4,
+    fontStyle: 'italic',
   },
 });
+</file>
+
+<file path="mobile/src/App.tsx">
+import React from 'react';
+import { StatusBar } from 'expo-status-bar';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { NavigationContainer } from '@react-navigation/native';
+
+// Import NativeWind setup
+import './utils/nativewind-setup';
+
+import { AuthProvider } from './context/AuthContext';
+import { TrainingProvider } from './context/TrainingContext';
+import Navigation from './navigation';
+
+function App() {
+  return (
+    <SafeAreaProvider>
+      <AuthProvider>
+        <TrainingProvider>
+          <NavigationContainer>
+            <Navigation />
+            <StatusBar style='auto' />
+          </NavigationContainer>
+        </TrainingProvider>
+      </AuthProvider>
+    </SafeAreaProvider>
+  );
+}
+
+export default App;
 </file>
 
 <file path="mobile/README.md">
@@ -16575,6 +16326,9 @@ service TrainingService {
 
   // Generate progression suggestions
   rpc GenerateProgressionSuggestions(ProgressionSuggestionsRequest) returns (ProgressionSuggestionsResponse);
+
+  // Update training plan exercises
+  rpc UpdateTrainingPlan(UpdateTrainingPlanRequest) returns (UpdateTrainingPlanResponse);
 }
 
 // Generate plan request
@@ -16730,6 +16484,18 @@ message ProgressionSuggestionsResponse {
   repeated ExerciseModificationSuggestion modified_exercises = 4;
   string generated_at = 5;
   string model_used = 6;
+}
+
+// UpdateTrainingPlan request
+message UpdateTrainingPlanRequest {
+  string training_plan_id = 1;
+  repeated Exercise updated_exercises = 2;
+}
+
+// UpdateTrainingPlan response
+message UpdateTrainingPlanResponse {
+  bool success = 1;
+  string message = 2;
 }
 </file>
 
@@ -18086,6 +17852,854 @@ declare module 'fastify' {
 }
 
 export default fastifyPlugin(dbPlugin, { name: 'db' });
+</file>
+
+<file path="mobile/src/context/AuthContext.tsx">
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import grpcClient, { UserProfile, ProfileData } from '../services/grpcClient';
+
+// Auth storage keys
+const AUTH_TOKEN_KEY = '@fitness_app:auth_token';
+const USER_DATA_KEY = '@fitness_app:user_data';
+
+interface AuthContextType {
+  user: UserProfile | null;
+  token: string | null;
+  isAuthenticated: boolean;
+  isLoading: boolean;
+  error: string | null;
+  login: (email: string, password: string) => Promise<void>;
+  register: (data: RegisterData) => Promise<void>;
+  logout: () => Promise<void>;
+  clearError: () => void;
+  setUser: (user: UserProfile | null) => void;
+  setToken: (token: string | null) => void;
+}
+
+export interface RegisterData {
+  email: string;
+  password: string;
+  firstName: string;
+  lastName: string;
+  profileData?: ProfileData;
+}
+
+interface AuthProviderProps {
+  children: React.ReactNode;
+}
+
+const AuthContext = createContext<AuthContextType>({
+  user: null,
+  token: null,
+  isAuthenticated: false,
+  isLoading: true,
+  error: null,
+  login: async () => {},
+  register: async () => {},
+  logout: async () => {},
+  clearError: () => {},
+  setUser: () => {},
+  setToken: () => {},
+});
+
+export const useAuth = () => useContext(AuthContext);
+
+export function AuthProvider({ children }: AuthProviderProps) {
+  const [user, setUser] = useState<UserProfile | null>(null);
+  const [token, setToken] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Check if user is already logged in
+  useEffect(() => {
+    const checkAuthStatus = async () => {
+      try {
+        setIsLoading(true);
+
+        // Get stored auth data
+        const storedToken = await AsyncStorage.getItem(AUTH_TOKEN_KEY);
+        const storedUserData = await AsyncStorage.getItem(USER_DATA_KEY);
+
+        if (storedToken && storedUserData) {
+          // Set the auth token on the gRPC client
+          grpcClient.setAuthToken(storedToken);
+          setToken(storedToken);
+
+          // Parse and set the user data
+          const userData = JSON.parse(storedUserData) as UserProfile;
+          setUser(userData);
+        }
+      } catch (err) {
+        console.error('Authentication check failed:', err);
+        setError('Failed to restore authentication session');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    checkAuthStatus();
+  }, []);
+
+  const storeAuthData = async (authToken: string, userData: UserProfile) => {
+    try {
+      await AsyncStorage.setItem(AUTH_TOKEN_KEY, authToken);
+      await AsyncStorage.setItem(USER_DATA_KEY, JSON.stringify(userData));
+
+      // Set token on the gRPC client for future authenticated requests
+      grpcClient.setAuthToken(authToken);
+      setToken(authToken);
+    } catch (err) {
+      console.error('Failed to store auth data:', err);
+      throw new Error('Failed to save authentication data');
+    }
+  };
+
+  const login = async (email: string, password: string) => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      // Call the gRPC service to authenticate
+      const response = await grpcClient.userService.authenticateUser({
+        email,
+        password,
+      });
+
+      // Store auth data
+      await storeAuthData(response.token, response.user);
+
+      // Update state
+      setUser(response.user);
+    } catch (err: any) {
+      console.error('Login failed:', err);
+      setError(err.message || 'Login failed. Please check your credentials.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const register = async (data: RegisterData) => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      // Call the gRPC service to create a user
+      const response = await grpcClient.userService.createUserProfile({
+        email: data.email,
+        password: data.password,
+        firstName: data.firstName,
+        lastName: data.lastName,
+        profileData: data.profileData || {},
+      });
+
+      // After successful registration, automatically log the user in
+      await login(data.email, data.password);
+    } catch (err: any) {
+      console.error('Registration failed:', err);
+      setError(err.message || 'Registration failed. Please try again.');
+      setIsLoading(false);
+    }
+  };
+
+  const logout = async () => {
+    setIsLoading(true);
+
+    try {
+      // Clear stored auth data
+      await AsyncStorage.removeItem(AUTH_TOKEN_KEY);
+      await AsyncStorage.removeItem(USER_DATA_KEY);
+
+      // Clear auth token from gRPC client
+      grpcClient.clearAuthToken();
+
+      // Update state
+      setUser(null);
+      setToken(null);
+    } catch (err) {
+      console.error('Logout failed:', err);
+      setError('Failed to logout properly');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const clearError = () => setError(null);
+
+  return (
+    <AuthContext.Provider
+      value={{
+        user,
+        token,
+        isAuthenticated: !!user,
+        isLoading,
+        error,
+        login,
+        register,
+        logout,
+        clearError,
+        setUser,
+        setToken,
+      }}>
+      {children}
+    </AuthContext.Provider>
+  );
+}
+</file>
+
+<file path="mobile/src/screens/ProgressScreen.tsx">
+import React, { useState, useEffect, useCallback } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  ActivityIndicator,
+  TouchableOpacity,
+  RefreshControl,
+  SafeAreaView,
+  Alert,
+} from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+
+import { RootStackParamList } from '../navigation';
+import { useAuth } from '../context/AuthContext';
+import grpcClient, {
+  ExerciseLog,
+  GetUserExerciseLogsRequest,
+} from '../services/grpcClient';
+import { ExerciseChart } from '../components/ExerciseChart';
+
+// Time range options for filtering
+const TIME_RANGES = [
+  { label: '7D', days: 7 },
+  { label: '30D', days: 30 },
+  { label: '90D', days: 90 },
+  { label: 'All', days: 365 },
+];
+
+// Metric options for viewing
+const METRICS: { label: string; value: 'weight' | 'rir' }[] = [
+  { label: 'Weight', value: 'weight' },
+  { label: 'RIR', value: 'rir' },
+];
+
+type ProgressScreenNavigationProp = NativeStackNavigationProp<
+  RootStackParamList,
+  'Progress'
+>;
+
+export default function ProgressScreen() {
+  const navigation = useNavigation<ProgressScreenNavigationProp>();
+  const { user } = useAuth();
+
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [exerciseLogs, setExerciseLogs] = useState<ExerciseLog[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedDays, setSelectedDays] = useState(30);
+  const [selectedMetric, setSelectedMetric] = useState<'weight' | 'rir'>(
+    'weight'
+  );
+  const [selectedExercise, setSelectedExercise] = useState<string | null>(null);
+
+  // Group logs by exercise name for easy access
+  const exerciseGroups = React.useMemo(() => {
+    const groups: { [key: string]: ExerciseLog[] } = {};
+
+    exerciseLogs.forEach((log) => {
+      if (!groups[log.exercise_name]) {
+        groups[log.exercise_name] = [];
+      }
+      groups[log.exercise_name].push(log);
+    });
+
+    return groups;
+  }, [exerciseLogs]);
+
+  // Get list of unique exercise names
+  const exerciseNames = React.useMemo(() => {
+    return Object.keys(exerciseGroups).sort();
+  }, [exerciseGroups]);
+
+  // Set first exercise as selected if none is selected and we have data
+  useEffect(() => {
+    if (exerciseNames.length > 0 && !selectedExercise) {
+      setSelectedExercise(exerciseNames[0]);
+    }
+  }, [exerciseNames, selectedExercise]);
+
+  // Fetch data from API
+  const fetchExerciseLogs = useCallback(
+    async (isRefresh = false) => {
+      if (!user) {
+        setError('User not authenticated');
+        setIsLoading(false);
+        return;
+      }
+
+      try {
+        if (!isRefresh) {
+          setIsLoading(true);
+        }
+        setError(null);
+
+        const request: GetUserExerciseLogsRequest = {
+          user_id: user.id,
+          days: selectedDays,
+          exercise_name: selectedExercise || undefined,
+        };
+
+        const response =
+          await grpcClient.trainingService.getUserExerciseLogs(request);
+
+        if (response.logs.length === 0 && selectedExercise) {
+          // If filtering by exercise and no logs found, try fetching all logs instead
+          const allLogsRequest: GetUserExerciseLogsRequest = {
+            user_id: user.id,
+            days: selectedDays,
+          };
+          const allResponse =
+            await grpcClient.trainingService.getUserExerciseLogs(
+              allLogsRequest
+            );
+          setExerciseLogs(allResponse.logs);
+        } else {
+          setExerciseLogs(response.logs);
+        }
+      } catch (err: any) {
+        setError(err.message || 'Failed to load exercise data');
+        console.error('Error fetching exercise logs:', err);
+
+        Alert.alert(
+          'Error Loading Data',
+          err.message ||
+            'Failed to load exercise data. Please try again later.',
+          [{ text: 'OK' }]
+        );
+      } finally {
+        setIsLoading(false);
+        if (isRefresh) {
+          setIsRefreshing(false);
+        }
+      }
+    },
+    [user, selectedDays, selectedExercise]
+  );
+
+  // Initial data load
+  useEffect(() => {
+    fetchExerciseLogs();
+  }, [fetchExerciseLogs]);
+
+  // Refetch when time range or exercise changes
+  useEffect(() => {
+    if (!isLoading) {
+      fetchExerciseLogs();
+    }
+  }, [selectedDays, selectedExercise, fetchExerciseLogs, isLoading]);
+
+  // Handle pull-to-refresh
+  const handleRefresh = useCallback(() => {
+    setIsRefreshing(true);
+    fetchExerciseLogs(true);
+  }, [fetchExerciseLogs]);
+
+  // Get logs for selected exercise
+  const selectedExerciseLogs = React.useMemo(() => {
+    if (!selectedExercise) return [];
+    return exerciseGroups[selectedExercise] || [];
+  }, [exerciseGroups, selectedExercise]);
+
+  // Loading state
+  if (isLoading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size='large' color='#3B82F6' />
+        <Text style={styles.loadingText}>Loading your progress data...</Text>
+      </View>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <View style={styles.errorContainer}>
+        <Text style={styles.errorTitle}>Oops!</Text>
+        <Text style={styles.errorText}>{error}</Text>
+        <TouchableOpacity
+          style={styles.button}
+          onPress={() => fetchExerciseLogs()}>
+          <Text style={styles.buttonText}>Try Again</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  // Empty state
+  if (exerciseNames.length === 0) {
+    return (
+      <ScrollView
+        contentContainerStyle={styles.emptyContainer}
+        refreshControl={
+          <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} />
+        }>
+        <Text style={styles.emptyTitle}>No Progress Data Yet</Text>
+        <Text style={styles.emptyText}>
+          Complete workouts and log your exercises to see your progress over
+          time.
+        </Text>
+        <TouchableOpacity
+          style={styles.button}
+          onPress={() => navigation.navigate('Home')}>
+          <Text style={styles.buttonText}>Go to Workouts</Text>
+        </TouchableOpacity>
+      </ScrollView>
+    );
+  }
+
+  return (
+    <SafeAreaView style={styles.container}>
+      {/* Time range selector */}
+      <View style={styles.filterContainer}>
+        <View style={styles.filterRow}>
+          <Text style={styles.filterLabel}>Time Range:</Text>
+          <View style={styles.filterOptions}>
+            {TIME_RANGES.map((range) => (
+              <TouchableOpacity
+                key={range.label}
+                style={[
+                  styles.filterOption,
+                  selectedDays === range.days && styles.filterOptionSelected,
+                ]}
+                onPress={() => setSelectedDays(range.days)}>
+                <Text
+                  style={[
+                    styles.filterOptionText,
+                    selectedDays === range.days &&
+                      styles.filterOptionTextSelected,
+                  ]}>
+                  {range.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+
+        {/* Metric selector */}
+        <View style={styles.filterRow}>
+          <Text style={styles.filterLabel}>Metric:</Text>
+          <View style={styles.filterOptions}>
+            {METRICS.map((metric) => (
+              <TouchableOpacity
+                key={metric.label}
+                style={[
+                  styles.filterOption,
+                  selectedMetric === metric.value &&
+                    styles.filterOptionSelected,
+                ]}
+                onPress={() => setSelectedMetric(metric.value)}>
+                <Text
+                  style={[
+                    styles.filterOptionText,
+                    selectedMetric === metric.value &&
+                      styles.filterOptionTextSelected,
+                  ]}>
+                  {metric.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+      </View>
+
+      {/* Exercise selector and chart */}
+      <ScrollView
+        refreshControl={
+          <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} />
+        }>
+        {/* Add AI Analysis button */}
+        <View style={styles.analysisButtonContainer}>
+          <TouchableOpacity
+            style={styles.analysisButton}
+            onPress={() =>
+              navigation.navigate('ProgressAnalysis', {
+                trainingPlanId: 'active-plan', // In a real app, use the active plan ID
+              })
+            }>
+            <Text style={styles.analysisButtonText}>
+              Get AI Progress Analysis
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Exercise selector */}
+        <View style={styles.exerciseSelector}>
+          <Text style={styles.sectionTitle}>Select Exercise:</Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.exerciseButtonsContainer}>
+            {exerciseNames.map((exerciseName) => (
+              <TouchableOpacity
+                key={exerciseName}
+                style={[
+                  styles.exerciseButton,
+                  selectedExercise === exerciseName &&
+                    styles.exerciseButtonSelected,
+                ]}
+                onPress={() => setSelectedExercise(exerciseName)}>
+                <Text
+                  style={[
+                    styles.exerciseButtonText,
+                    selectedExercise === exerciseName &&
+                      styles.exerciseButtonTextSelected,
+                  ]}>
+                  {exerciseName}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+
+        {/* Show chart for selected exercise */}
+        {selectedExercise && (
+          <View style={styles.chartContainer}>
+            <ExerciseChart
+              exerciseLogs={selectedExerciseLogs}
+              metric={selectedMetric}
+              title={selectedExercise}
+              days={selectedDays}
+            />
+
+            {/* Summary stats */}
+            <View style={styles.statsContainer}>
+              <StatsCard
+                exerciseLogs={selectedExerciseLogs}
+                metric={selectedMetric}
+                days={selectedDays}
+              />
+            </View>
+          </View>
+        )}
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+// Simple stats component
+interface StatsCardProps {
+  exerciseLogs: ExerciseLog[];
+  metric: 'weight' | 'rir';
+  days: number;
+}
+
+function StatsCard({ exerciseLogs, metric, days }: StatsCardProps) {
+  // Filter logs by days
+  const filteredLogs = React.useMemo(() => {
+    if (!exerciseLogs.length) return [];
+
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+
+    const cutoffDate = new Date();
+    cutoffDate.setDate(now.getDate() - days);
+    cutoffDate.setHours(0, 0, 0, 0);
+
+    return exerciseLogs.filter(
+      (log) => new Date(log.created_at).getTime() >= cutoffDate.getTime()
+    );
+  }, [exerciseLogs, days]);
+
+  if (filteredLogs.length === 0) {
+    return (
+      <View style={styles.statsCard}>
+        <Text style={styles.statsTitle}>Statistics</Text>
+        <Text style={styles.noStatsText}>
+          No data available for selected period
+        </Text>
+      </View>
+    );
+  }
+
+  // Get metric values
+  const values = filteredLogs.map((log) =>
+    metric === 'weight' ? log.weight : log.rir
+  );
+
+  // Calculate stats
+  const currentValue = values[values.length - 1];
+  const startingValue = values[0];
+  const maxValue = Math.max(...values);
+  const avgValue = values.reduce((a, b) => a + b, 0) / values.length;
+
+  // Calculate change
+  const change = currentValue - startingValue;
+  const changePercent =
+    startingValue !== 0 ? (change / startingValue) * 100 : 0;
+
+  // For RIR, lower is better. For weight, higher is better.
+  const isPositiveChange = metric === 'weight' ? change > 0 : change < 0;
+
+  return (
+    <View style={styles.statsCard}>
+      <Text style={styles.statsTitle}>Statistics</Text>
+      <View style={styles.statsGrid}>
+        <View style={styles.statItem}>
+          <Text style={styles.statLabel}>Current</Text>
+          <Text style={styles.statValue}>
+            {currentValue.toFixed(metric === 'weight' ? 1 : 0)}
+            {metric === 'weight' ? ' kg' : ''}
+          </Text>
+        </View>
+
+        <View style={styles.statItem}>
+          <Text style={styles.statLabel}>Starting</Text>
+          <Text style={styles.statValue}>
+            {startingValue.toFixed(metric === 'weight' ? 1 : 0)}
+            {metric === 'weight' ? ' kg' : ''}
+          </Text>
+        </View>
+
+        <View style={styles.statItem}>
+          <Text style={styles.statLabel}>Change</Text>
+          <Text
+            style={[
+              styles.statValue,
+              isPositiveChange ? styles.positiveChange : styles.negativeChange,
+            ]}>
+            {change > 0 ? '+' : ''}
+            {change.toFixed(metric === 'weight' ? 1 : 0)}
+            {metric === 'weight' ? ' kg' : ''}
+          </Text>
+        </View>
+
+        <View style={styles.statItem}>
+          <Text style={styles.statLabel}>Max</Text>
+          <Text style={styles.statValue}>
+            {maxValue.toFixed(metric === 'weight' ? 1 : 0)}
+            {metric === 'weight' ? ' kg' : ''}
+          </Text>
+        </View>
+
+        <View style={styles.statItem}>
+          <Text style={styles.statLabel}>Average</Text>
+          <Text style={styles.statValue}>
+            {avgValue.toFixed(metric === 'weight' ? 1 : 0)}
+            {metric === 'weight' ? ' kg' : ''}
+          </Text>
+        </View>
+
+        <View style={styles.statItem}>
+          <Text style={styles.statLabel}>Sessions</Text>
+          <Text style={styles.statValue}>{filteredLogs.length}</Text>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#f5f5f5',
+  },
+  loadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#f5f5f5',
+  },
+  loadingText: {
+    marginTop: 10,
+    fontSize: 16,
+    color: '#666',
+  },
+  errorContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20,
+    backgroundColor: '#f5f5f5',
+  },
+  errorTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 10,
+  },
+  errorText: {
+    fontSize: 16,
+    textAlign: 'center',
+    marginBottom: 20,
+    color: '#666',
+  },
+  emptyContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20,
+  },
+  emptyTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 10,
+  },
+  emptyText: {
+    fontSize: 16,
+    textAlign: 'center',
+    marginBottom: 20,
+    color: '#666',
+  },
+  button: {
+    backgroundColor: '#3B82F6',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+  },
+  buttonText: {
+    color: 'white',
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
+  filterContainer: {
+    backgroundColor: 'white',
+    padding: 15,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  filterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  filterLabel: {
+    width: 100,
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  filterOptions: {
+    flex: 1,
+    flexDirection: 'row',
+  },
+  filterOption: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+    marginRight: 8,
+    backgroundColor: '#f0f0f0',
+  },
+  filterOptionSelected: {
+    backgroundColor: '#3B82F6',
+  },
+  filterOptionText: {
+    fontSize: 14,
+  },
+  filterOptionTextSelected: {
+    color: 'white',
+    fontWeight: 'bold',
+  },
+  exerciseSelector: {
+    padding: 15,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 10,
+  },
+  exerciseButtonsContainer: {
+    paddingRight: 15,
+  },
+  exerciseButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    marginRight: 8,
+    backgroundColor: '#f0f0f0',
+  },
+  exerciseButtonSelected: {
+    backgroundColor: '#3B82F6',
+  },
+  exerciseButtonText: {
+    fontSize: 14,
+  },
+  exerciseButtonTextSelected: {
+    color: 'white',
+    fontWeight: 'bold',
+  },
+  chartContainer: {
+    paddingHorizontal: 15,
+    marginBottom: 20,
+  },
+  statsContainer: {
+    marginTop: 10,
+  },
+  statsCard: {
+    backgroundColor: 'white',
+    borderRadius: 10,
+    padding: 15,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  statsTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 10,
+  },
+  statsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  statItem: {
+    width: '33%',
+    marginBottom: 12,
+  },
+  statLabel: {
+    fontSize: 12,
+    color: '#666',
+  },
+  statValue: {
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  positiveChange: {
+    color: '#22c55e',
+  },
+  negativeChange: {
+    color: '#ef4444',
+  },
+  noStatsText: {
+    color: '#666',
+    fontSize: 14,
+    fontStyle: 'italic',
+  },
+  analysisButtonContainer: {
+    padding: 15,
+    marginBottom: 5,
+  },
+  analysisButton: {
+    backgroundColor: '#4F46E5',
+    padding: 14,
+    borderRadius: 8,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  analysisButtonText: {
+    color: 'white',
+    fontWeight: 'bold',
+    fontSize: 15,
+  },
+});
 </file>
 
 <file path="server/generated/prisma/edge.js">
@@ -29751,6 +30365,18 @@ interface ProgressionSuggestionsResponse {
   model_used: string;
 }
 
+// Interface for Update Training Plan Request
+interface UpdateTrainingPlanRequest {
+  training_plan_id: string;
+  updated_exercises: Exercise[];
+}
+
+// Interface for Update Training Plan Response
+interface UpdateTrainingPlanResponse {
+  success: boolean;
+  message: string;
+}
+
 const prisma = new PrismaClient();
 
 export interface TrainingHandler {
@@ -29758,6 +30384,8 @@ export interface TrainingHandler {
   RecordWorkout: UntypedHandleCall;
   SubmitSessionFeedback: UntypedHandleCall;
   GenerateProgressionSuggestions: UntypedHandleCall;
+  UpdateTrainingPlan: UntypedHandleCall;
+  [key: string]: UntypedHandleCall;
 }
 
 /**
@@ -30202,6 +30830,133 @@ export const trainingHandler: TrainingHandler = {
       });
     }
   },
+
+  /**
+   * Update a training plan
+   */
+  UpdateTrainingPlan: async (
+    call: ServerUnaryCall<
+      UpdateTrainingPlanRequest,
+      UpdateTrainingPlanResponse
+    >,
+    callback: sendUnaryData<UpdateTrainingPlanResponse>
+  ) => {
+    try {
+      const { training_plan_id, updated_exercises } = call.request;
+
+      // Input validation
+      if (!training_plan_id) {
+        return callback({
+          code: 3, // INVALID_ARGUMENT
+          message: 'Training plan ID is required',
+        });
+      }
+
+      if (!updated_exercises?.length) {
+        return callback({
+          code: 3, // INVALID_ARGUMENT
+          message: 'At least one exercise must be provided for update',
+        });
+      }
+
+      // Find the training plan with its sessions and exercises
+      const trainingPlan = await prisma.trainingPlan.findUnique({
+        where: { id: training_plan_id },
+        include: {
+          trainingSessions: {
+            include: {
+              exerciseLogs: true,
+            },
+          },
+        },
+      });
+
+      if (!trainingPlan) {
+        return callback({
+          code: 5, // NOT_FOUND
+          message: 'Training plan not found',
+        });
+      }
+
+      // Group exercises by day of week for easier processing
+      const exercisesByDay = updated_exercises.reduce((acc, exercise) => {
+        const day = exercise.day_of_week;
+        if (!acc[day]) acc[day] = [];
+        acc[day].push(exercise);
+        return acc;
+      }, {} as Record<number, typeof updated_exercises>);
+
+      // Process updates for each training session
+      const updatePromises = trainingPlan.trainingSessions.map(
+        async (session) => {
+          const dayExercises = exercisesByDay[session.dayOfWeek] || [];
+
+          // Get existing exercise logs for this session
+          const existingLogs = session.exerciseLogs || [];
+
+          // Process each exercise for this day
+          const exercisePromises = dayExercises.map(async (exercise) => {
+            // Try to find matching exercise by name
+            const existingLog = existingLogs.find(
+              (log) =>
+                log.exerciseName.toLowerCase() === exercise.name.toLowerCase()
+            );
+
+            if (existingLog) {
+              // Update existing exercise
+              return prisma.exerciseLog.update({
+                where: { id: existingLog.id },
+                data: {
+                  exerciseName: exercise.name,
+                  sets: exercise.sets,
+                  reps: exercise.reps,
+                  feedback: exercise.notes || null,
+                  // Keep existing weight and RIR values as they are not part of the Exercise proto
+                },
+              });
+            } else {
+              // Create new exercise log
+              return prisma.exerciseLog.create({
+                data: {
+                  trainingSessionId: session.id,
+                  userId: trainingPlan.userId,
+                  exerciseName: exercise.name,
+                  sets: exercise.sets,
+                  reps: exercise.reps,
+                  feedback: exercise.notes || null,
+                  weight: null, // Initialize as null since not provided in Exercise proto
+                  rir: null, // Initialize as null since not provided in Exercise proto
+                },
+              });
+            }
+          });
+
+          // Execute all exercise updates for this session
+          await Promise.all(exercisePromises);
+        }
+      );
+
+      // Execute all session updates
+      await Promise.all(updatePromises);
+
+      // Update the training plan's updatedAt timestamp
+      await prisma.trainingPlan.update({
+        where: { id: training_plan_id },
+        data: { updatedAt: new Date() },
+      });
+
+      return callback(null, {
+        success: true,
+        message: 'Training plan exercises updated successfully',
+      });
+    } catch (error) {
+      console.error('Error updating training plan:', error);
+      return callback({
+        code: 13, // INTERNAL
+        message: 'Failed to update training plan exercises',
+      });
+    }
+  },
 };
 
 /**
@@ -30555,6 +31310,10 @@ async function registerPlugins() {
   // Register AI gRPC service
   const aiGrpcService = await import('./domain/grpc/ai');
   await server.register(aiGrpcService.default);
+
+  // Register Training gRPC service
+  const trainingGrpcService = await import('./domain/grpc/training');
+  await server.register(trainingGrpcService.default);
 
   // Swagger documentation
   await server.register(require('@fastify/swagger'), {
@@ -30946,6 +31705,8 @@ import {
   ProgressionSuggestionsRequest as ProgressionSuggestionsRequestProto,
   ProgressionSuggestionsResponse as ProgressionSuggestionsResponseProto,
   ExerciseModificationSuggestion as ExerciseModificationSuggestionProto,
+  UpdateTrainingPlanRequest as UpdateTrainingPlanRequestProto,
+  UpdateTrainingPlanResponse as UpdateTrainingPlanResponseProto,
 } from '../generated/training/training';
 
 // Define service endpoints
@@ -31092,6 +31853,16 @@ export interface ProgressionSuggestionsResponse {
   model_used: string;
 }
 
+export interface UpdateTrainingPlanRequest {
+  training_plan_id: string;
+  updated_exercises: ExerciseData[];
+}
+
+export interface UpdateTrainingPlanResponse {
+  success: boolean;
+  message: string;
+}
+
 // User service interfaces
 interface UserService {
   authenticateUser: (request: LoginRequest) => Promise<AuthResponse>;
@@ -31116,6 +31887,9 @@ interface TrainingService {
   generateProgressionSuggestions: (
     request: ProgressionSuggestionsRequest
   ) => Promise<ProgressionSuggestionsResponse>;
+  updateTrainingPlan: (
+    request: UpdateTrainingPlanRequest
+  ) => Promise<UpdateTrainingPlanResponse>;
 }
 
 // Simplified GrpcClient class
@@ -31143,6 +31917,7 @@ class GrpcClient {
       getUserExerciseLogs: this.getUserExerciseLogs.bind(this),
       generateProgressionSuggestions:
         this.generateProgressionSuggestions.bind(this),
+      updateTrainingPlan: this.updateTrainingPlan.bind(this),
     };
   }
 
@@ -31813,6 +32588,72 @@ class GrpcClient {
     } catch (error) {
       console.error('Progression suggestions error:', error);
       throw new Error('Failed to generate progression suggestions');
+    }
+  }
+
+  private async updateTrainingPlan(
+    request: UpdateTrainingPlanRequest
+  ): Promise<UpdateTrainingPlanResponse> {
+    try {
+      console.log('Updating training plan:', request.training_plan_id);
+
+      // Check if we have an auth token
+      if (!this.authToken) {
+        throw new Error('Authentication required');
+      }
+
+      // Transform the exercises to the proto format
+      const transformedExercises = request.updated_exercises.map(
+        (exercise) => ({
+          id: exercise.id,
+          name: exercise.name,
+          description: exercise.description,
+          sets: exercise.sets,
+          reps: exercise.reps,
+          rest_time: exercise.restTime,
+          notes: exercise.notes,
+          day_of_week: exercise.dayOfWeek,
+          order: exercise.order,
+        })
+      );
+
+      // Create the request object
+      const req = {
+        training_plan_id: request.training_plan_id,
+        updated_exercises: transformedExercises,
+      };
+
+      // Define the method details for the UpdateTrainingPlan endpoint
+      const updateMethod: GrpcMethodDefinition<any, any> = {
+        methodName: 'UpdateTrainingPlan',
+        service: { serviceName: TrainingServiceServiceName },
+        requestStream: false,
+        responseStream: false,
+        requestType: {
+          new: () => ({}),
+          encode: (msg: any) => msg,
+        } as any,
+        responseType: {
+          new: () => ({}),
+          decode: (reader: any) => reader,
+        } as any,
+      };
+
+      // Make the gRPC call
+      const response = await callUnary<any, any>(
+        updateMethod,
+        req,
+        this.authToken
+      );
+
+      // Return the response
+      return {
+        success: response.success,
+        message: response.message,
+      };
+    } catch (error: any) {
+      console.error('Error updating training plan:', error);
+      throw new Error(error.message || 'Failed to update training plan');
     }
   }
 }

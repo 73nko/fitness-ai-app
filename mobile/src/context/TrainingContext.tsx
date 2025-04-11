@@ -3,6 +3,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import grpcClient, {
   TrainingPlanResponse,
   TrainingPlanRequest,
+  UpdateTrainingPlanRequest,
+  UpdateTrainingPlanResponse,
+  ExerciseData,
 } from '../services/grpcClient';
 import { useAuth } from './AuthContext';
 
@@ -16,6 +19,10 @@ interface TrainingContextType {
   setTrainingPlan: (plan: TrainingPlanResponse | null) => void;
   fetchTrainingPlan: () => Promise<TrainingPlanResponse | null>;
   fetchTodaySession: () => Promise<TrainingPlanResponse | null>;
+  updateTrainingPlan: (
+    planId: string,
+    exercises: ExerciseData[]
+  ) => Promise<UpdateTrainingPlanResponse | null>;
   clearError: () => void;
 }
 
@@ -30,6 +37,7 @@ const TrainingContext = createContext<TrainingContextType>({
   setTrainingPlan: () => {},
   fetchTrainingPlan: async () => null,
   fetchTodaySession: async () => null,
+  updateTrainingPlan: async () => null,
   clearError: () => {},
 });
 
@@ -148,6 +156,48 @@ export function TrainingProvider({ children }: TrainingProviderProps) {
 
   const clearError = () => setError(null);
 
+  const updateTrainingPlan = async (
+    planId: string,
+    exercises: ExerciseData[]
+  ): Promise<UpdateTrainingPlanResponse | null> => {
+    if (!isAuthenticated || !user) {
+      setError('User not authenticated');
+      return null;
+    }
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const request: UpdateTrainingPlanRequest = {
+        training_plan_id: planId,
+        updated_exercises: exercises,
+      };
+
+      const response =
+        await grpcClient.trainingService.updateTrainingPlan(request);
+
+      // If successful, update the cached plan if it's the current one
+      if (response.success && trainingPlan && trainingPlan.id === planId) {
+        // Create a new plan with updated exercises
+        const updatedPlan = {
+          ...trainingPlan,
+          exercises: exercises,
+          updatedAt: new Date().toISOString(),
+        };
+        setTrainingPlan(updatedPlan);
+      }
+
+      return response;
+    } catch (err: any) {
+      console.error('Failed to update training plan:', err);
+      setError(err.message || 'Failed to update training plan');
+      return null;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <TrainingContext.Provider
       value={{
@@ -157,6 +207,7 @@ export function TrainingProvider({ children }: TrainingProviderProps) {
         setTrainingPlan,
         fetchTrainingPlan,
         fetchTodaySession,
+        updateTrainingPlan,
         clearError,
       }}>
       {children}

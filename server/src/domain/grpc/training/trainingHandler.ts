@@ -112,6 +112,18 @@ interface ProgressionSuggestionsResponse {
   model_used: string;
 }
 
+// Interface for Update Training Plan Request
+interface UpdateTrainingPlanRequest {
+  training_plan_id: string;
+  updated_exercises: Exercise[];
+}
+
+// Interface for Update Training Plan Response
+interface UpdateTrainingPlanResponse {
+  success: boolean;
+  message: string;
+}
+
 const prisma = new PrismaClient();
 
 export interface TrainingHandler {
@@ -119,6 +131,8 @@ export interface TrainingHandler {
   RecordWorkout: UntypedHandleCall;
   SubmitSessionFeedback: UntypedHandleCall;
   GenerateProgressionSuggestions: UntypedHandleCall;
+  UpdateTrainingPlan: UntypedHandleCall;
+  [key: string]: UntypedHandleCall;
 }
 
 /**
@@ -560,6 +574,133 @@ export const trainingHandler: TrainingHandler = {
         code: 13, // INTERNAL
         message: 'An internal error occurred',
         details: error instanceof Error ? error.message : String(error),
+      });
+    }
+  },
+
+  /**
+   * Update a training plan
+   */
+  UpdateTrainingPlan: async (
+    call: ServerUnaryCall<
+      UpdateTrainingPlanRequest,
+      UpdateTrainingPlanResponse
+    >,
+    callback: sendUnaryData<UpdateTrainingPlanResponse>
+  ) => {
+    try {
+      const { training_plan_id, updated_exercises } = call.request;
+
+      // Input validation
+      if (!training_plan_id) {
+        return callback({
+          code: 3, // INVALID_ARGUMENT
+          message: 'Training plan ID is required',
+        });
+      }
+
+      if (!updated_exercises?.length) {
+        return callback({
+          code: 3, // INVALID_ARGUMENT
+          message: 'At least one exercise must be provided for update',
+        });
+      }
+
+      // Find the training plan with its sessions and exercises
+      const trainingPlan = await prisma.trainingPlan.findUnique({
+        where: { id: training_plan_id },
+        include: {
+          trainingSessions: {
+            include: {
+              exerciseLogs: true,
+            },
+          },
+        },
+      });
+
+      if (!trainingPlan) {
+        return callback({
+          code: 5, // NOT_FOUND
+          message: 'Training plan not found',
+        });
+      }
+
+      // Group exercises by day of week for easier processing
+      const exercisesByDay = updated_exercises.reduce((acc, exercise) => {
+        const day = exercise.day_of_week;
+        if (!acc[day]) acc[day] = [];
+        acc[day].push(exercise);
+        return acc;
+      }, {} as Record<number, typeof updated_exercises>);
+
+      // Process updates for each training session
+      const updatePromises = trainingPlan.trainingSessions.map(
+        async (session) => {
+          const dayExercises = exercisesByDay[session.dayOfWeek] || [];
+
+          // Get existing exercise logs for this session
+          const existingLogs = session.exerciseLogs || [];
+
+          // Process each exercise for this day
+          const exercisePromises = dayExercises.map(async (exercise) => {
+            // Try to find matching exercise by name
+            const existingLog = existingLogs.find(
+              (log) =>
+                log.exerciseName.toLowerCase() === exercise.name.toLowerCase()
+            );
+
+            if (existingLog) {
+              // Update existing exercise
+              return prisma.exerciseLog.update({
+                where: { id: existingLog.id },
+                data: {
+                  exerciseName: exercise.name,
+                  sets: exercise.sets,
+                  reps: exercise.reps,
+                  feedback: exercise.notes || null,
+                  // Keep existing weight and RIR values as they are not part of the Exercise proto
+                },
+              });
+            } else {
+              // Create new exercise log
+              return prisma.exerciseLog.create({
+                data: {
+                  trainingSessionId: session.id,
+                  userId: trainingPlan.userId,
+                  exerciseName: exercise.name,
+                  sets: exercise.sets,
+                  reps: exercise.reps,
+                  feedback: exercise.notes || null,
+                  weight: null, // Initialize as null since not provided in Exercise proto
+                  rir: null, // Initialize as null since not provided in Exercise proto
+                },
+              });
+            }
+          });
+
+          // Execute all exercise updates for this session
+          await Promise.all(exercisePromises);
+        }
+      );
+
+      // Execute all session updates
+      await Promise.all(updatePromises);
+
+      // Update the training plan's updatedAt timestamp
+      await prisma.trainingPlan.update({
+        where: { id: training_plan_id },
+        data: { updatedAt: new Date() },
+      });
+
+      return callback(null, {
+        success: true,
+        message: 'Training plan exercises updated successfully',
+      });
+    } catch (error) {
+      console.error('Error updating training plan:', error);
+      return callback({
+        code: 13, // INTERNAL
+        message: 'Failed to update training plan exercises',
       });
     }
   },

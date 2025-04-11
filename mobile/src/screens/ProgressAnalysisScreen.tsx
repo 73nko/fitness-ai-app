@@ -15,10 +15,12 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 import { RootStackParamList } from '../navigation';
 import { useAuth } from '../context/AuthContext';
+import { useTraining } from '../context/TrainingContext';
 import grpcClient, {
   ProgressionSuggestionsRequest,
   ProgressionSuggestionsResponse,
   ExerciseModificationSuggestion,
+  ExerciseData,
 } from '../services/grpcClient';
 
 // Card component for modified exercises
@@ -123,11 +125,13 @@ export default function ProgressAnalysisScreen() {
   const navigation = useNavigation<ProgressAnalysisScreenNavigationProp>();
   const route = useRoute<ProgressAnalysisScreenRouteProp>();
   const { user } = useAuth();
+  const { trainingPlan, updateTrainingPlan } = useTraining();
 
   const [analysis, setAnalysis] =
     useState<ProgressionSuggestionsResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [historyWeeks, setHistoryWeeks] = useState<number>(4); // Default to 4 weeks history
 
@@ -202,6 +206,85 @@ export default function ProgressAnalysisScreen() {
     );
   };
 
+  // Function to apply the suggested changes to the training plan
+  const handleApplySuggestions = async () => {
+    if (!analysis || !trainingPlan) return;
+
+    // Confirmation alert
+    Alert.alert(
+      'Apply Suggestions',
+      'This will update your training plan with the recommended changes. Continue?',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Apply',
+          onPress: async () => {
+            try {
+              setIsSaving(true);
+
+              // Get the current exercises from the training plan
+              const currentExercises = [...trainingPlan.exercises];
+
+              // Apply the changes from the suggestions
+              analysis.modified_exercises.forEach((suggestion) => {
+                const exerciseIndex = currentExercises.findIndex(
+                  (ex) =>
+                    ex.id === suggestion.exercise_id ||
+                    ex.name === suggestion.exercise_id
+                );
+
+                if (exerciseIndex >= 0) {
+                  // Found the exercise to modify
+                  const exercise = currentExercises[exerciseIndex];
+
+                  // If there's a weight recommendation, update it
+                  if (suggestion.new_weight) {
+                    exercise.restTime = suggestion.new_weight; // Use restTime field to store weight
+                  }
+
+                  // If there's a replacement exercise, update the name
+                  if (suggestion.replace_with) {
+                    exercise.name = suggestion.replace_with;
+                  }
+
+                  // Update the exercise in the array
+                  currentExercises[exerciseIndex] = exercise;
+                }
+              });
+
+              // Call the updateTrainingPlan method
+              const result = await updateTrainingPlan(
+                trainingPlanId,
+                currentExercises
+              );
+
+              if (result?.success) {
+                Alert.alert(
+                  'Success',
+                  'Your training plan has been updated with the suggested changes.'
+                );
+              } else {
+                throw new Error(
+                  result?.message || 'Failed to update training plan'
+                );
+              }
+            } catch (err: any) {
+              Alert.alert(
+                'Error',
+                err.message || 'Failed to apply suggestions'
+              );
+            } finally {
+              setIsSaving(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   // Loading state
   if (isLoading) {
     return (
@@ -262,112 +345,74 @@ export default function ProgressAnalysisScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView
+        contentContainerStyle={styles.scrollContent}
         refreshControl={
           <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} />
         }>
-        {/* Header section */}
-        <View style={styles.headerContainer}>
-          <View style={styles.headerRow}>
-            <Text style={styles.title}>AI Progress Analysis</Text>
-            {analysis.deload_recommended && (
-              <View style={styles.deloadBadge}>
-                <Text style={styles.deloadBadgeText}>Deload Recommended</Text>
-              </View>
-            )}
-          </View>
+        <View style={styles.header}>
+          <Text style={styles.title}>Progress Analysis</Text>
           <Text style={styles.subtitle}>
-            Generated on {analysisDate} · {analysis.model_used}
+            AI-generated insights based on {historyWeeks} weeks of data
           </Text>
         </View>
 
-        {/* Summary section */}
-        <View style={styles.summaryContainer}>
-          <Text style={styles.sectionTitle}>Summary</Text>
+        {/* Summary card */}
+        <View style={styles.summaryCard}>
+          <Text style={styles.summaryTitle}>
+            {analysis.deload_recommended
+              ? '⚠️ Deload Recommended'
+              : '🎯 Progress Update'}
+          </Text>
           <Text style={styles.summaryText}>{analysis.summary}</Text>
+          <View style={styles.generatedInfo}>
+            <Text style={styles.generatedText}>
+              Generated on:{' '}
+              {new Date(analysis.generated_at).toLocaleDateString()}
+            </Text>
+            <Text style={styles.modelText}>Model: {analysis.model_used}</Text>
+          </View>
         </View>
 
-        {/* History weeks selector */}
-        <View style={styles.historyWeeksContainer}>
-          <Text style={styles.sectionTitle}>Analysis Timeframe</Text>
-          <View style={styles.historyWeeksSelector}>
-            {HISTORY_WEEKS_OPTIONS.map((option) => (
-              <TouchableOpacity
-                key={option.value}
-                style={[
-                  styles.historyWeeksOption,
-                  historyWeeks === option.value &&
-                    styles.historyWeeksOptionSelected,
-                ]}
-                onPress={() => {
-                  setHistoryWeeks(option.value);
-                  // Refetch with new history weeks setting
-                  fetchAnalysis();
-                }}>
-                <Text
-                  style={[
-                    styles.historyWeeksOptionText,
-                    historyWeeks === option.value &&
-                      styles.historyWeeksOptionTextSelected,
-                  ]}>
-                  {option.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-          <Text style={styles.historyWeeksDescription}>
-            Select the time period to analyze for progression recommendations.
-            Longer periods show more trends but may include outdated data.
+        {/* Modified exercises section */}
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Suggested Adjustments</Text>
+          <Text style={styles.sectionSubtitle}>
+            {analysis.modified_exercises.length} exercise
+            {analysis.modified_exercises.length !== 1 ? 's' : ''} to modify
           </Text>
         </View>
 
-        {/* Exercise suggestions section */}
-        <View style={styles.suggestionsContainer}>
-          <Text style={styles.sectionTitle}>Exercise Suggestions</Text>
-
-          {analysis.deload_recommended && (
-            <View style={styles.deloadWarningContainer}>
-              <Text style={styles.deloadWarningText}>
-                <Text style={styles.deloadWarningIcon}>⚠️</Text> Deload Week
-                Recommended
-              </Text>
-              <Text style={styles.deloadDescription}>
-                Your recent training data suggests you may need a deload week.
-                Consider reducing intensity by 30-40% while maintaining movement
-                patterns.
-              </Text>
-            </View>
-          )}
-
-          {analysis.modified_exercises.length === 0 ? (
-            <View style={styles.noSuggestionsContainer}>
-              <Text style={styles.noSuggestionsText}>
-                No specific exercise modifications recommended at this time.
-                Keep up the good work!
-              </Text>
-            </View>
-          ) : (
-            analysis.modified_exercises.map((suggestion, index) => (
-              <SuggestionCard
-                key={`${suggestion.exercise_id}-${index}`}
-                suggestion={suggestion}
-                isDeloadRecommended={analysis.deload_recommended}
-              />
-            ))
-          )}
-        </View>
+        {/* Exercise suggestion cards */}
+        {analysis.modified_exercises.map((suggestion, index) => (
+          <SuggestionCard
+            key={`${suggestion.exercise_id}-${index}`}
+            suggestion={suggestion}
+            isDeloadRecommended={analysis.deload_recommended}
+          />
+        ))}
 
         {/* Action buttons */}
-        <View style={styles.actionButtonsContainer}>
+        <View style={styles.actions}>
           <TouchableOpacity
-            style={styles.secondaryButton}
-            onPress={() => navigation.goBack()}>
-            <Text style={styles.secondaryButtonText}>Back to Progress</Text>
+            style={[styles.actionButton, styles.secondaryButton]}
+            onPress={handleRegenerateAnalysis}
+            disabled={isLoading || isSaving}>
+            <Text style={styles.actionButtonText}>Regenerate Analysis</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={styles.primaryButton}
-            onPress={handleRegenerateAnalysis}>
-            <Text style={styles.primaryButtonText}>Regenerate Analysis</Text>
+            style={[
+              styles.actionButton,
+              styles.primaryButton,
+              (isLoading || isSaving) && styles.disabledButton,
+            ]}
+            onPress={handleApplySuggestions}
+            disabled={isLoading || isSaving}>
+            {isSaving ? (
+              <ActivityIndicator size='small' color='#fff' />
+            ) : (
+              <Text style={styles.actionButtonText}>Apply Suggestions</Text>
+            )}
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -429,7 +474,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     color: '#666',
   },
-  headerContainer: {
+  header: {
     padding: 16,
     backgroundColor: 'white',
     marginBottom: 12,
@@ -441,11 +486,6 @@ const styles = StyleSheet.create({
     shadowRadius: 2,
     elevation: 2,
   },
-  headerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
   title: {
     fontSize: 24,
     fontWeight: 'bold',
@@ -456,7 +496,7 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     marginTop: 4,
   },
-  summaryContainer: {
+  summaryCard: {
     padding: 16,
     backgroundColor: 'white',
     marginHorizontal: 16,
@@ -468,7 +508,7 @@ const styles = StyleSheet.create({
     shadowRadius: 2,
     elevation: 2,
   },
-  sectionTitle: {
+  summaryTitle: {
     fontSize: 18,
     fontWeight: 'bold',
     marginBottom: 8,
@@ -479,17 +519,42 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     color: '#4B5563',
   },
-  suggestionsContainer: {
+  generatedInfo: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  generatedText: {
+    fontSize: 14,
+    color: '#6B7280',
+  },
+  modelText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#111827',
+  },
+  sectionHeader: {
     padding: 16,
     backgroundColor: 'white',
-    marginHorizontal: 16,
+    marginTop: 16,
     borderRadius: 8,
-    marginBottom: 16,
+    marginHorizontal: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
+    shadowOpacity: 0.1,
     shadowRadius: 2,
     elevation: 2,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#111827',
+  },
+  sectionSubtitle: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginTop: 4,
   },
   suggestionCard: {
     backgroundColor: 'white',
@@ -656,81 +721,34 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#10B981',
   },
-  actionButtonsContainer: {
+  actions: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     padding: 16,
-    marginBottom: 20,
+    marginHorizontal: 16,
+    marginTop: 24,
+  },
+  actionButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    minWidth: '45%',
+    alignItems: 'center',
+  },
+  actionButtonText: {
+    fontWeight: 'bold',
+    fontSize: 16,
   },
   primaryButton: {
     backgroundColor: '#3B82F6',
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 8,
-    flex: 1,
-    marginLeft: 8,
-    alignItems: 'center',
   },
   secondaryButton: {
     backgroundColor: '#E5E7EB',
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 8,
-    flex: 1,
-    marginRight: 8,
-    alignItems: 'center',
   },
-  primaryButtonText: {
-    color: 'white',
-    fontWeight: 'bold',
-    fontSize: 16,
+  disabledButton: {
+    opacity: 0.5,
   },
-  secondaryButtonText: {
-    color: '#4B5563',
-    fontWeight: 'bold',
-    fontSize: 16,
-  },
-  historyWeeksContainer: {
-    backgroundColor: 'white',
-    padding: 16,
-    marginHorizontal: 15,
-    marginBottom: 15,
-    borderRadius: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  historyWeeksSelector: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 10,
-    marginBottom: 12,
-  },
-  historyWeeksOption: {
-    flex: 1,
-    paddingVertical: 8,
-    paddingHorizontal: 4,
-    alignItems: 'center',
-    backgroundColor: '#F3F4F6',
-    marginHorizontal: 4,
-    borderRadius: 8,
-  },
-  historyWeeksOptionSelected: {
-    backgroundColor: '#3B82F6',
-  },
-  historyWeeksOptionText: {
-    fontSize: 14,
-    color: '#4B5563',
-  },
-  historyWeeksOptionTextSelected: {
-    color: 'white',
-    fontWeight: 'bold',
-  },
-  historyWeeksDescription: {
-    fontSize: 12,
-    color: '#6B7280',
-    lineHeight: 18,
+  scrollContent: {
+    paddingBottom: 24,
   },
 });

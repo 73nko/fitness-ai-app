@@ -172,6 +172,18 @@ export interface ProgressionSuggestionsResponse {
   modelUsed: string;
 }
 
+/** UpdateTrainingPlan request */
+export interface UpdateTrainingPlanRequest {
+  trainingPlanId: string;
+  updatedExercises: Exercise[];
+}
+
+/** UpdateTrainingPlan response */
+export interface UpdateTrainingPlanResponse {
+  success: boolean;
+  message: string;
+}
+
 function createBaseGeneratePlanRequest(): GeneratePlanRequest {
   return { userId: "", planName: undefined, description: undefined };
 }
@@ -2388,6 +2400,160 @@ export const ProgressionSuggestionsResponse: MessageFns<ProgressionSuggestionsRe
   },
 };
 
+function createBaseUpdateTrainingPlanRequest(): UpdateTrainingPlanRequest {
+  return { trainingPlanId: "", updatedExercises: [] };
+}
+
+export const UpdateTrainingPlanRequest: MessageFns<UpdateTrainingPlanRequest> = {
+  encode(message: UpdateTrainingPlanRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.trainingPlanId !== "") {
+      writer.uint32(10).string(message.trainingPlanId);
+    }
+    for (const v of message.updatedExercises) {
+      Exercise.encode(v!, writer.uint32(18).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): UpdateTrainingPlanRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    let end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseUpdateTrainingPlanRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.trainingPlanId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.updatedExercises.push(Exercise.decode(reader, reader.uint32()));
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): UpdateTrainingPlanRequest {
+    return {
+      trainingPlanId: isSet(object.trainingPlanId) ? globalThis.String(object.trainingPlanId) : "",
+      updatedExercises: globalThis.Array.isArray(object?.updatedExercises)
+        ? object.updatedExercises.map((e: any) => Exercise.fromJSON(e))
+        : [],
+    };
+  },
+
+  toJSON(message: UpdateTrainingPlanRequest): unknown {
+    const obj: any = {};
+    if (message.trainingPlanId !== "") {
+      obj.trainingPlanId = message.trainingPlanId;
+    }
+    if (message.updatedExercises?.length) {
+      obj.updatedExercises = message.updatedExercises.map((e) => Exercise.toJSON(e));
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<UpdateTrainingPlanRequest>, I>>(base?: I): UpdateTrainingPlanRequest {
+    return UpdateTrainingPlanRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<UpdateTrainingPlanRequest>, I>>(object: I): UpdateTrainingPlanRequest {
+    const message = createBaseUpdateTrainingPlanRequest();
+    message.trainingPlanId = object.trainingPlanId ?? "";
+    message.updatedExercises = object.updatedExercises?.map((e) => Exercise.fromPartial(e)) || [];
+    return message;
+  },
+};
+
+function createBaseUpdateTrainingPlanResponse(): UpdateTrainingPlanResponse {
+  return { success: false, message: "" };
+}
+
+export const UpdateTrainingPlanResponse: MessageFns<UpdateTrainingPlanResponse> = {
+  encode(message: UpdateTrainingPlanResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.success !== false) {
+      writer.uint32(8).bool(message.success);
+    }
+    if (message.message !== "") {
+      writer.uint32(18).string(message.message);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): UpdateTrainingPlanResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    let end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseUpdateTrainingPlanResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.success = reader.bool();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.message = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): UpdateTrainingPlanResponse {
+    return {
+      success: isSet(object.success) ? globalThis.Boolean(object.success) : false,
+      message: isSet(object.message) ? globalThis.String(object.message) : "",
+    };
+  },
+
+  toJSON(message: UpdateTrainingPlanResponse): unknown {
+    const obj: any = {};
+    if (message.success !== false) {
+      obj.success = message.success;
+    }
+    if (message.message !== "") {
+      obj.message = message.message;
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<UpdateTrainingPlanResponse>, I>>(base?: I): UpdateTrainingPlanResponse {
+    return UpdateTrainingPlanResponse.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<UpdateTrainingPlanResponse>, I>>(object: I): UpdateTrainingPlanResponse {
+    const message = createBaseUpdateTrainingPlanResponse();
+    message.success = object.success ?? false;
+    message.message = object.message ?? "";
+    return message;
+  },
+};
+
 export interface TrainingService {
   /** Generate a training plan */
   GenerateTrainingPlan(request: GeneratePlanRequest): Promise<TrainingPlanResponse>;
@@ -2401,6 +2567,8 @@ export interface TrainingService {
   SubmitSessionFeedback(request: SubmitSessionFeedbackRequest): Promise<SubmitSessionFeedbackResponse>;
   /** Generate progression suggestions */
   GenerateProgressionSuggestions(request: ProgressionSuggestionsRequest): Promise<ProgressionSuggestionsResponse>;
+  /** Update training plan exercises */
+  UpdateTrainingPlan(request: UpdateTrainingPlanRequest): Promise<UpdateTrainingPlanResponse>;
 }
 
 export const TrainingServiceServiceName = "training.TrainingService";
@@ -2416,6 +2584,7 @@ export class TrainingServiceClientImpl implements TrainingService {
     this.GetUserProgress = this.GetUserProgress.bind(this);
     this.SubmitSessionFeedback = this.SubmitSessionFeedback.bind(this);
     this.GenerateProgressionSuggestions = this.GenerateProgressionSuggestions.bind(this);
+    this.UpdateTrainingPlan = this.UpdateTrainingPlan.bind(this);
   }
   GenerateTrainingPlan(request: GeneratePlanRequest): Promise<TrainingPlanResponse> {
     const data = GeneratePlanRequest.encode(request).finish();
@@ -2451,6 +2620,12 @@ export class TrainingServiceClientImpl implements TrainingService {
     const data = ProgressionSuggestionsRequest.encode(request).finish();
     const promise = this.rpc.request(this.service, "GenerateProgressionSuggestions", data);
     return promise.then((data) => ProgressionSuggestionsResponse.decode(new BinaryReader(data)));
+  }
+
+  UpdateTrainingPlan(request: UpdateTrainingPlanRequest): Promise<UpdateTrainingPlanResponse> {
+    const data = UpdateTrainingPlanRequest.encode(request).finish();
+    const promise = this.rpc.request(this.service, "UpdateTrainingPlan", data);
+    return promise.then((data) => UpdateTrainingPlanResponse.decode(new BinaryReader(data)));
   }
 }
 

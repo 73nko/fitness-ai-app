@@ -28,6 +28,8 @@ import {
   ProgressionSuggestionsRequest as ProgressionSuggestionsRequestProto,
   ProgressionSuggestionsResponse as ProgressionSuggestionsResponseProto,
   ExerciseModificationSuggestion as ExerciseModificationSuggestionProto,
+  UpdateTrainingPlanRequest as UpdateTrainingPlanRequestProto,
+  UpdateTrainingPlanResponse as UpdateTrainingPlanResponseProto,
 } from '../generated/training/training';
 
 // Define service endpoints
@@ -174,6 +176,16 @@ export interface ProgressionSuggestionsResponse {
   model_used: string;
 }
 
+export interface UpdateTrainingPlanRequest {
+  training_plan_id: string;
+  updated_exercises: ExerciseData[];
+}
+
+export interface UpdateTrainingPlanResponse {
+  success: boolean;
+  message: string;
+}
+
 // User service interfaces
 interface UserService {
   authenticateUser: (request: LoginRequest) => Promise<AuthResponse>;
@@ -198,6 +210,9 @@ interface TrainingService {
   generateProgressionSuggestions: (
     request: ProgressionSuggestionsRequest
   ) => Promise<ProgressionSuggestionsResponse>;
+  updateTrainingPlan: (
+    request: UpdateTrainingPlanRequest
+  ) => Promise<UpdateTrainingPlanResponse>;
 }
 
 // Simplified GrpcClient class
@@ -225,6 +240,7 @@ class GrpcClient {
       getUserExerciseLogs: this.getUserExerciseLogs.bind(this),
       generateProgressionSuggestions:
         this.generateProgressionSuggestions.bind(this),
+      updateTrainingPlan: this.updateTrainingPlan.bind(this),
     };
   }
 
@@ -895,6 +911,72 @@ class GrpcClient {
     } catch (error) {
       console.error('Progression suggestions error:', error);
       throw new Error('Failed to generate progression suggestions');
+    }
+  }
+
+  private async updateTrainingPlan(
+    request: UpdateTrainingPlanRequest
+  ): Promise<UpdateTrainingPlanResponse> {
+    try {
+      console.log('Updating training plan:', request.training_plan_id);
+
+      // Check if we have an auth token
+      if (!this.authToken) {
+        throw new Error('Authentication required');
+      }
+
+      // Transform the exercises to the proto format
+      const transformedExercises = request.updated_exercises.map(
+        (exercise) => ({
+          id: exercise.id,
+          name: exercise.name,
+          description: exercise.description,
+          sets: exercise.sets,
+          reps: exercise.reps,
+          rest_time: exercise.restTime,
+          notes: exercise.notes,
+          day_of_week: exercise.dayOfWeek,
+          order: exercise.order,
+        })
+      );
+
+      // Create the request object
+      const req = {
+        training_plan_id: request.training_plan_id,
+        updated_exercises: transformedExercises,
+      };
+
+      // Define the method details for the UpdateTrainingPlan endpoint
+      const updateMethod: GrpcMethodDefinition<any, any> = {
+        methodName: 'UpdateTrainingPlan',
+        service: { serviceName: TrainingServiceServiceName },
+        requestStream: false,
+        responseStream: false,
+        requestType: {
+          new: () => ({}),
+          encode: (msg: any) => msg,
+        } as any,
+        responseType: {
+          new: () => ({}),
+          decode: (reader: any) => reader,
+        } as any,
+      };
+
+      // Make the gRPC call
+      const response = await callUnary<any, any>(
+        updateMethod,
+        req,
+        this.authToken
+      );
+
+      // Return the response
+      return {
+        success: response.success,
+        message: response.message,
+      };
+    } catch (error: any) {
+      console.error('Error updating training plan:', error);
+      throw new Error(error.message || 'Failed to update training plan');
     }
   }
 }

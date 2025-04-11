@@ -52,6 +52,10 @@ async function registerPlugins() {
   const aiGrpcService = await import('./domain/grpc/ai');
   await server.register(aiGrpcService.default);
 
+  // Register Training gRPC service
+  const trainingGrpcService = await import('./domain/grpc/training');
+  await server.register(trainingGrpcService.default);
+
   // Swagger documentation
   await server.register(require('@fastify/swagger'), {
     routePrefix: '/documentation',
