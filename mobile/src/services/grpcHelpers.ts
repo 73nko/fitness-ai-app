@@ -1,9 +1,5 @@
 import { grpc } from '@improbable-eng/grpc-web';
-import { NodeHttpTransport } from '@improbable-eng/grpc-web-node-http-transport';
 import env from '../config/env';
-
-// Register the NodeHttpTransport for React Native compatibility
-grpc.setDefaultTransport(NodeHttpTransport());
 
 /**
  * Error response structure for gRPC calls
