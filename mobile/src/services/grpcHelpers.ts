@@ -1,4 +1,5 @@
 import { grpc } from '@improbable-eng/grpc-web';
+import { ReactNativeTransport } from '@improbable-eng/grpc-web-react-native-transport';
 import env from '../config/env';
 
 /**
@@ -57,7 +58,7 @@ export function callUnary<TRequest, TResponse>(
       grpc.ProtobufMessage
     >;
     const grpcRequest = request as unknown as grpc.ProtobufMessage;
-
+    grpc.setDefaultTransport(ReactNativeTransport({}));
     grpc.unary(grpcMethod, {
       request: grpcRequest,
       host: env.GRPC_ENDPOINT,

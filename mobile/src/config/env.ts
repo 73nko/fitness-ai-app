@@ -10,7 +10,8 @@ interface EnvConfig {
 
 // Default values in case .env file is missing
 const defaultConfig: EnvConfig = {
-  GRPC_ENDPOINT: 'http://localhost:8080',
+  // Use IP address instead of localhost for iOS
+  GRPC_ENDPOINT: 'http://127.0.0.1:8080',
   API_KEY: 'dev_key',
   APP_ENV: 'development',
   DEBUG_MODE: true,

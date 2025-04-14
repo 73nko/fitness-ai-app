@@ -237,7 +237,6 @@ export default function RegisterScreen() {
                 formErrors.password ? 'border-red-500' : 'border-gray-200'
               }`}
               placeholder='Password'
-              secureTextEntry
               value={formData.password}
               onChangeText={(text) => {
                 setFormData({ ...formData, password: text });
@@ -265,7 +264,6 @@ export default function RegisterScreen() {
                   : 'border-gray-200'
               }`}
               placeholder='Confirm Password'
-              secureTextEntry
               value={formData.confirmPassword}
               onChangeText={(text) => {
                 setFormData({ ...formData, confirmPassword: text });

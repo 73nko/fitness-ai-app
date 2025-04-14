@@ -1,6 +1,5 @@
-import { grpc } from '@improbable-eng/grpc-web';
 import env from '../config/env';
-import { callUnary, GrpcMethodDefinition, GrpcError } from './grpcHelpers';
+import { callUnary, GrpcMethodDefinition } from './grpcHelpers';
 
 // Import the generated service and message definitions
 import {

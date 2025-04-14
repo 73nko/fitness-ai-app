@@ -58,13 +58,21 @@ export function AuthProvider({ children }: AuthProviderProps) {
   useEffect(() => {
     const checkAuthStatus = async () => {
       try {
+        console.log('Checking auth status...');
         setIsLoading(true);
 
         // Get stored auth data
         const storedToken = await AsyncStorage.getItem(AUTH_TOKEN_KEY);
+        console.log('Stored token:', storedToken ? 'exists' : 'not found');
+
         const storedUserData = await AsyncStorage.getItem(USER_DATA_KEY);
+        console.log(
+          'Stored user data:',
+          storedUserData ? 'exists' : 'not found'
+        );
 
         if (storedToken && storedUserData) {
+          console.log('Found stored credentials, restoring session...');
           // Set the auth token on the gRPC client
           grpcClient.setAuthToken(storedToken);
           setToken(storedToken);
@@ -72,11 +80,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
           // Parse and set the user data
           const userData = JSON.parse(storedUserData) as UserProfile;
           setUser(userData);
+          console.log('Session restored successfully');
+        } else {
+          console.log('No stored credentials found');
         }
       } catch (err) {
         console.error('Authentication check failed:', err);
         setError('Failed to restore authentication session');
       } finally {
+        console.log('Auth check completed, setting isLoading to false');
         setIsLoading(false);
       }
     };
