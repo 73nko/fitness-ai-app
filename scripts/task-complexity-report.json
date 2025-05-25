@@ -1,0 +1,21 @@
+{
+  "meta": {
+    "generatedAt": "2025-05-25T10:33:46.985Z",
+    "tasksAnalyzed": 1,
+    "totalTasks": 15,
+    "analysisCount": 1,
+    "thresholdScore": 5,
+    "projectName": "Taskmaster",
+    "usedResearch": true
+  },
+  "complexityAnalysis": [
+    {
+      "taskId": 2,
+      "taskTitle": "Implement Shared Type Definitions",
+      "complexityScore": 7,
+      "recommendedSubtasks": 5,
+      "expansionPrompt": "Break down the implementation of shared type definitions into specific subtasks, including setup, schema creation, type generation, documentation, and integration steps.",
+      "reasoning": "This task involves creating a shared type system, which requires careful planning and implementation. It includes working with TypeScript, Zod for schema validation, and ensuring type safety across the backend and frontend. The complexity comes from the need to design a robust type system that covers various data structures and edge cases."
+    }
+  ]
+}

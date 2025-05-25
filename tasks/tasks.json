@@ -74,7 +74,57 @@
       "priority": "high",
       "dependencies": [],
       "status": "pending",
-      "subtasks": []
+      "subtasks": [
+        {
+          "id": 1,
+          "title": "Set up project structure for shared types",
+          "description": "Create a new directory for shared types and configure TypeScript",
+          "dependencies": [],
+          "details": "Create a 'shared-types' directory, initialize npm, install TypeScript and Zod, and set up tsconfig.json",
+          "status": "pending"
+        },
+        {
+          "id": 2,
+          "title": "Define Zod schemas for core data structures",
+          "description": "Create Zod schemas for main entities and data types used in the application",
+          "dependencies": [
+            1
+          ],
+          "details": "Identify core data structures, create Zod schemas for each, ensuring proper validation rules",
+          "status": "pending"
+        },
+        {
+          "id": 3,
+          "title": "Generate TypeScript types from Zod schemas",
+          "description": "Use Zod's inference to create TypeScript types from the defined schemas",
+          "dependencies": [
+            2
+          ],
+          "details": "Create a types.ts file, import Zod schemas, and use z.infer<typeof Schema> to generate TypeScript types",
+          "status": "pending"
+        },
+        {
+          "id": 4,
+          "title": "Document shared types and usage guidelines",
+          "description": "Create documentation for the shared types and how to use them in different parts of the application",
+          "dependencies": [
+            3
+          ],
+          "details": "Write README.md with explanations of each type, usage examples, and best practices for type safety",
+          "status": "pending"
+        },
+        {
+          "id": 5,
+          "title": "Integrate shared types into backend and frontend",
+          "description": "Import and use the shared types in both backend and frontend code",
+          "dependencies": [
+            3,
+            4
+          ],
+          "details": "Update import statements in relevant files, refactor existing type annotations, and ensure type consistency across the application",
+          "status": "pending"
+        }
+      ]
     },
     {
       "id": 3,

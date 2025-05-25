@@ -44,3 +44,35 @@ export type TrainingPlan = z.infer<typeof TrainingPlanSchema>;
 2. Test edge cases for each schema
 3. Verify type inference works correctly
 4. Test schema composition for complex objects
+
+# Subtasks:
+## 1. Set up project structure for shared types [pending]
+### Dependencies: None
+### Description: Create a new directory for shared types and configure TypeScript
+### Details:
+Create a 'shared-types' directory, initialize npm, install TypeScript and Zod, and set up tsconfig.json
+
+## 2. Define Zod schemas for core data structures [pending]
+### Dependencies: 2.1
+### Description: Create Zod schemas for main entities and data types used in the application
+### Details:
+Identify core data structures, create Zod schemas for each, ensuring proper validation rules
+
+## 3. Generate TypeScript types from Zod schemas [pending]
+### Dependencies: 2.2
+### Description: Use Zod's inference to create TypeScript types from the defined schemas
+### Details:
+Create a types.ts file, import Zod schemas, and use z.infer<typeof Schema> to generate TypeScript types
+
+## 4. Document shared types and usage guidelines [pending]
+### Dependencies: 2.3
+### Description: Create documentation for the shared types and how to use them in different parts of the application
+### Details:
+Write README.md with explanations of each type, usage examples, and best practices for type safety
+
+## 5. Integrate shared types into backend and frontend [pending]
+### Dependencies: 2.3, 2.4
+### Description: Import and use the shared types in both backend and frontend code
+### Details:
+Update import statements in relevant files, refactor existing type annotations, and ensure type consistency across the application
+

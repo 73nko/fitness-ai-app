@@ -8,8 +8,62 @@
       "testStrategy": "1. Unit test the router setup and configuration\n2. Test that CORS is properly configured\n3. Verify error handling middleware catches and formats errors correctly\n4. Ensure all route prefixes are registered correctly",
       "priority": "high",
       "dependencies": [],
-      "status": "pending",
-      "subtasks": []
+      "status": "done",
+      "subtasks": [
+        {
+          "id": 1,
+          "title": "Create REST API Directory Structure",
+          "description": "Set up a new directory structure for REST API endpoints within the Fastify server project.",
+          "dependencies": [],
+          "details": "Create a new 'rest' directory under 'src/api'. Within 'rest', create subdirectories for 'routes', 'middleware', and 'controllers'. This structure will separate concerns and improve code organization.",
+          "status": "done",
+          "testStrategy": "Verify the existence and correct structure of the newly created directories using file system checks in a unit test."
+        },
+        {
+          "id": 2,
+          "title": "Implement Base Router Configuration",
+          "description": "Set up the base router configuration for REST endpoints in the Fastify server.",
+          "dependencies": [
+            1
+          ],
+          "details": "Create an 'index.ts' file in the 'src/api/rest' directory. Implement a 'setupRestApi' function that initializes Fastify plugins, registers route handlers, and sets up basic configurations like CORS and error handling.",
+          "status": "done",
+          "testStrategy": "Write integration tests to ensure the base router is properly configured and can handle basic requests."
+        },
+        {
+          "id": 3,
+          "title": "Configure CORS for REST Endpoints",
+          "description": "Implement CORS (Cross-Origin Resource Sharing) configuration for the REST API endpoints.",
+          "dependencies": [
+            2
+          ],
+          "details": "Use the '@fastify/cors' plugin to configure CORS settings. Set up options to allow specific origins or use a wildcard. Ensure credentials are properly handled if required.",
+          "status": "done",
+          "testStrategy": "Create unit tests to verify CORS headers are properly set on responses. Include tests for both allowed and disallowed origins."
+        },
+        {
+          "id": 4,
+          "title": "Implement Request Logging Middleware",
+          "description": "Create and integrate middleware for logging incoming REST API requests.",
+          "dependencies": [
+            2
+          ],
+          "details": "Develop a custom middleware function that logs relevant information for each incoming request, such as method, URL, headers, and body (if applicable). Integrate this middleware into the Fastify server configuration.",
+          "status": "done",
+          "testStrategy": "Use mock objects to test if the logging middleware correctly captures and formats request information. Verify log output in integration tests."
+        },
+        {
+          "id": 5,
+          "title": "Set Up Error Handling Middleware",
+          "description": "Implement error handling middleware for the REST API to manage and respond to various types of errors consistently.",
+          "dependencies": [
+            2
+          ],
+          "details": "Create an error handling function that catches both synchronous and asynchronous errors. Implement logic to determine appropriate status codes and error messages. Integrate this handler using Fastify's setErrorHandler method.",
+          "status": "done",
+          "testStrategy": "Write unit tests for the error handler function with various error scenarios. Perform integration tests to ensure proper error responses are sent for different types of errors (e.g., 404, 500)."
+        }
+      ]
     },
     {
       "id": 2,
