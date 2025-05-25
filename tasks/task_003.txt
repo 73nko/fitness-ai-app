@@ -51,3 +51,35 @@ export async function authRoutes(fastify: FastifyInstance) {
 3. Test error cases (invalid credentials, already registered)
 4. Verify JWT token generation and validation
 5. Test token refresh functionality
+
+# Subtasks:
+## 1. Create authentication route structure [pending]
+### Dependencies: None
+### Description: Set up the basic structure for authentication routes in `/api/auth`
+### Details:
+Create a new file `auth.ts` in the `/api/rest/routes` directory. Define and export an async function `authRoutes` that takes a FastifyInstance parameter. Import necessary dependencies like FastifyInstance and AuthService.
+
+## 2. Implement login endpoint [pending]
+### Dependencies: 3.1
+### Description: Create a POST endpoint for user login that mirrors the gRPC implementation
+### Details:
+Inside the `authRoutes` function, implement a POST route for '/login'. Use the LoginSchema for request body validation. Call the AuthService's login method with email and password. Return a JWT token on successful login. Implement proper error handling for invalid credentials.
+
+## 3. Implement registration endpoint [pending]
+### Dependencies: 3.1
+### Description: Create a POST endpoint for user registration that mirrors the gRPC implementation
+### Details:
+Inside the `authRoutes` function, implement a POST route for '/register'. Use the RegisterSchema for request body validation. Call the AuthService's register method with user details. Return a success message or user object on successful registration. Implement proper error handling for existing users or invalid data.
+
+## 4. Implement token refresh endpoint [pending]
+### Dependencies: 3.1
+### Description: Create a POST endpoint for refreshing JWT tokens
+### Details:
+Inside the `authRoutes` function, implement a POST route for '/refresh-token'. Validate the incoming refresh token. Call the AuthService's refreshToken method. Return a new access token on successful refresh. Implement proper error handling for invalid or expired refresh tokens.
+
+## 5. Implement authentication middleware [pending]
+### Dependencies: 3.2, 3.3, 3.4
+### Description: Create middleware for verifying JWT tokens on protected routes
+### Details:
+Create a new file `authMiddleware.ts` in the `/api/rest/middleware` directory. Implement a function that verifies the JWT token from the Authorization header. Use the same token verification logic as in the gRPC implementation. Return 401 Unauthorized for invalid tokens. Attach the decoded user information to the request object for use in protected routes.
+

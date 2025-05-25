@@ -70,8 +70,9 @@ Create a types.ts file, import Zod schemas, and use z.infer<typeof Schema> to ge
 ### Details:
 Write README.md with explanations of each type, usage examples, and best practices for type safety
 
-## 5. Integrate shared types into backend and frontend [pending]
+## 5. Integrate shared types into backend and frontend [done]
 ### Dependencies: 2.3, 2.4
-### Description: Import and use the shared types in both backend and frontend code
+### Description: Import and use the shared types in both backend and frontend code. This involves configuring the server and mobile app to use these types, developing a typed API client, and migrating features.
 ### Details:
-Update import statements in relevant files, refactor existing type annotations, and ensure type consistency across the application
+This is a parent task for the integration steps. See sub-tasks.
+

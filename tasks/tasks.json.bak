@@ -74,7 +74,101 @@
       "priority": "high",
       "dependencies": [],
       "status": "pending",
-      "subtasks": []
+      "subtasks": [
+        {
+          "id": 1,
+          "title": "Set up project structure for shared types",
+          "description": "Create a new directory for shared types and configure TypeScript",
+          "dependencies": [],
+          "details": "Create a 'shared-types' directory, initialize npm, install TypeScript and Zod, and set up tsconfig.json",
+          "status": "done"
+        },
+        {
+          "id": 2,
+          "title": "Define Zod schemas for core data structures",
+          "description": "Create Zod schemas for main entities and data types used in the application",
+          "dependencies": [
+            1
+          ],
+          "details": "Identify core data structures, create Zod schemas for each, ensuring proper validation rules",
+          "status": "done"
+        },
+        {
+          "id": 3,
+          "title": "Generate TypeScript types from Zod schemas",
+          "description": "Use Zod's inference to create TypeScript types from the defined schemas",
+          "dependencies": [
+            2
+          ],
+          "details": "Create a types.ts file, import Zod schemas, and use z.infer<typeof Schema> to generate TypeScript types",
+          "status": "done"
+        },
+        {
+          "id": 4,
+          "title": "Document shared types and usage guidelines",
+          "description": "Create documentation for the shared types and how to use them in different parts of the application",
+          "dependencies": [
+            3
+          ],
+          "details": "Write README.md with explanations of each type, usage examples, and best practices for type safety",
+          "status": "done"
+        },
+        {
+          "id": 5,
+          "title": "Integrate shared types into backend and frontend",
+          "description": "Import and use the shared types in both backend and frontend code. This involves configuring the server and mobile app to use these types, developing a typed API client, and migrating features.",
+          "dependencies": [
+            "2.3",
+            "2.4"
+          ],
+          "details": "This is a parent task for the integration steps. See sub-tasks.",
+          "status": "done",
+          "subtasks": [
+            {
+              "id": 1,
+              "title": "Configure Server to Use Shared Types for New REST Endpoints",
+              "description": "Update Fastify server to allow easy import of shared types. Modify new REST API route handlers to use Zod schemas for request validation and TypeScript types for responses.",
+              "dependencies": [],
+              "details": "Adjust server's tsconfig.json if needed for path aliases to '../shared-types/src'. As new REST endpoints are built, use Zod schemas for input validation and shared TypeScript types for responses.",
+              "status": "done",
+              "testStrategy": "Verify server compiles with new imports. Unit test new route handlers to confirm Zod validation and typed responses."
+            },
+            {
+              "id": 2,
+              "title": "Develop Typed API Client for Mobile App using Shared Types",
+              "description": "Create a new API client service (e.g., restClient.ts) in the mobile app that uses shared TypeScript types for requests and responses.",
+              "dependencies": [
+                "2.5.1"
+              ],
+              "details": "Set up mobile project to import from '../shared-types/src'. Implement client methods (fetch/axios) for REST endpoints using shared types. Handle HTTP errors.",
+              "status": "done",
+              "testStrategy": "Unit test API client methods. Mock server responses. Verify typed requests and responses."
+            },
+            {
+              "id": 3,
+              "title": "Gradually Migrate Mobile App Features to Use New Typed REST Client",
+              "description": "Systematically update mobile app features/screens to replace gRPC calls with calls to the new typed REST API client.",
+              "dependencies": [
+                "2.5.2"
+              ],
+              "details": "Identify features using grpcClient.ts. Refactor to use restClient.ts. Ensure data flow through useTraining() and useAuth() uses new types. Test each migrated feature.",
+              "status": "pending",
+              "testStrategy": "Component and integration tests for migrated features. Verify UI and data consistency. End-to-end tests for key user flows."
+            },
+            {
+              "id": 4,
+              "title": "(Optional/Future) Integrate Shared Types into Web Frontend",
+              "description": "If/when the React web frontend also migrates to these REST APIs, repeat a similar integration process for it.",
+              "dependencies": [
+                "2.5.1"
+              ],
+              "details": "Similar to mobile: set up imports, create/update API client, refactor components/services.",
+              "status": "pending",
+              "testStrategy": "Similar to mobile frontend tests."
+            }
+          ]
+        }
+      ]
     },
     {
       "id": 3,

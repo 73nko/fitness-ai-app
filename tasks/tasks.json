@@ -182,7 +182,63 @@
         2
       ],
       "status": "pending",
-      "subtasks": []
+      "subtasks": [
+        {
+          "id": 1,
+          "title": "Create authentication route structure",
+          "description": "Set up the basic structure for authentication routes in `/api/auth`",
+          "dependencies": [],
+          "details": "Create a new file `auth.ts` in the `/api/rest/routes` directory. Define and export an async function `authRoutes` that takes a FastifyInstance parameter. Import necessary dependencies like FastifyInstance and AuthService.",
+          "status": "pending",
+          "testStrategy": "Verify the file structure and basic setup using unit tests"
+        },
+        {
+          "id": 2,
+          "title": "Implement login endpoint",
+          "description": "Create a POST endpoint for user login that mirrors the gRPC implementation",
+          "dependencies": [
+            1
+          ],
+          "details": "Inside the `authRoutes` function, implement a POST route for '/login'. Use the LoginSchema for request body validation. Call the AuthService's login method with email and password. Return a JWT token on successful login. Implement proper error handling for invalid credentials.",
+          "status": "pending",
+          "testStrategy": "Write integration tests to verify successful login and proper error responses"
+        },
+        {
+          "id": 3,
+          "title": "Implement registration endpoint",
+          "description": "Create a POST endpoint for user registration that mirrors the gRPC implementation",
+          "dependencies": [
+            1
+          ],
+          "details": "Inside the `authRoutes` function, implement a POST route for '/register'. Use the RegisterSchema for request body validation. Call the AuthService's register method with user details. Return a success message or user object on successful registration. Implement proper error handling for existing users or invalid data.",
+          "status": "pending",
+          "testStrategy": "Write integration tests to verify successful registration and proper error responses"
+        },
+        {
+          "id": 4,
+          "title": "Implement token refresh endpoint",
+          "description": "Create a POST endpoint for refreshing JWT tokens",
+          "dependencies": [
+            1
+          ],
+          "details": "Inside the `authRoutes` function, implement a POST route for '/refresh-token'. Validate the incoming refresh token. Call the AuthService's refreshToken method. Return a new access token on successful refresh. Implement proper error handling for invalid or expired refresh tokens.",
+          "status": "pending",
+          "testStrategy": "Write integration tests to verify successful token refresh and proper error responses"
+        },
+        {
+          "id": 5,
+          "title": "Implement authentication middleware",
+          "description": "Create middleware for verifying JWT tokens on protected routes",
+          "dependencies": [
+            2,
+            3,
+            4
+          ],
+          "details": "Create a new file `authMiddleware.ts` in the `/api/rest/middleware` directory. Implement a function that verifies the JWT token from the Authorization header. Use the same token verification logic as in the gRPC implementation. Return 401 Unauthorized for invalid tokens. Attach the decoded user information to the request object for use in protected routes.",
+          "status": "pending",
+          "testStrategy": "Write unit tests for the middleware and integration tests with protected routes"
+        }
+      ]
     },
     {
       "id": 4,
