@@ -244,7 +244,7 @@
       "id": 4,
       "title": "Implement User Profile REST Endpoints",
       "description": "Create REST endpoints for user profile operations that mirror the existing gRPC user service.",
-      "details": "1. Create user profile routes in `/api/user`\n2. Implement GET and PUT endpoints for profile management\n3. Ensure proper authentication middleware is applied\n\nExample implementation:\n```typescript\n// src/api/rest/routes/user.ts\nimport { FastifyInstance } from 'fastify';\nimport { UserService } from '../../../services/user';\nimport { UpdateProfileSchema } from '@fitnessai/types';\nimport { authenticate } from '../middleware/auth';\n\nexport async function userRoutes(fastify: FastifyInstance) {\n  const userService = new UserService();\n  \n  fastify.get('/profile', {\n    preHandler: [authenticate],\n    handler: async (request, reply) => {\n      const userId = request.user.id;\n      const profile = await userService.getUserProfile(userId);\n      if (!profile) {\n        return reply.status(404).send({\n          error: 'NotFound',\n          message: 'User profile not found'\n        });\n      }\n      return reply.send(profile);\n    }\n  });\n  \n  fastify.put('/profile', {\n    schema: {\n      body: UpdateProfileSchema\n    },\n    preHandler: [authenticate],\n    handler: async (request, reply) => {\n      const userId = request.user.id;\n      const updatedProfile = await userService.updateProfile(userId, request.body);\n      return reply.send(updatedProfile);\n    }\n  });\n}\n```",
+      "details": "1. Create user profile routes in `/api/user`\n2. Implement GET and PUT endpoints for profile management\n3. Ensure proper authentication middleware is applied\n\nExample implementation:\n```typescript\n// server/src/api/rest/routes/user.ts\nimport { FastifyInstance } from 'fastify';\nimport { UserService } from '../../../services/user';\nimport { UpdateProfileSchema } from '@fitnessai/types';\nimport { authenticate } from '../middleware/auth';\n\nexport async function userRoutes(fastify: FastifyInstance) {\n  const userService = new UserService();\n  \n  fastify.get('/profile', {\n    preHandler: [authenticate],\n    handler: async (request, reply) => {\n      const userId = request.user.id;\n      const profile = await userService.getUserProfile(userId);\n      if (!profile) {\n        return reply.status(404).send({\n          error: 'NotFound',\n          message: 'User profile not found'\n        });\n      }\n      return reply.send(profile);\n    }\n  });\n  \n  fastify.put('/profile', {\n    schema: {\n      body: UpdateProfileSchema\n    },\n    preHandler: [authenticate],\n    handler: async (request, reply) => {\n      const userId = request.user.id;\n      const updatedProfile = await userService.updateProfile(userId, request.body);\n      return reply.send(updatedProfile);\n    }\n  });\n}\n```",
       "testStrategy": "1. Unit test each user profile endpoint\n2. Test authentication middleware integration\n3. Test successful profile retrieval and updates\n4. Test error cases (user not found, validation errors)\n5. Verify database interactions",
       "priority": "medium",
       "dependencies": [
@@ -259,7 +259,7 @@
           "title": "Set up route file for /api/user",
           "description": "Create a new file for user profile routes and set up the basic structure",
           "dependencies": [],
-          "details": "Create a new file 'src/api/rest/routes/user.ts'. Import necessary modules (FastifyInstance, UserService). Define and export an async function 'userRoutes' that takes a FastifyInstance parameter.",
+          "details": "Create a new file 'server/src/api/rest/routes/user.ts'. Import necessary modules (FastifyInstance, UserService). Define and export an async function 'userRoutes' that takes a FastifyInstance parameter.",
           "status": "pending",
           "testStrategy": "Verify file creation and basic structure with imports and exported function"
         },
@@ -268,8 +268,8 @@
           "title": "Create placeholder UserService",
           "description": "Implement a basic UserService class with placeholder methods for profile operations",
           "dependencies": [],
-          "details": "Create 'src/services/user.ts'. Define UserService class with methods: getUserProfile(userId: string) and updateProfile(userId: string, data: any). Implement these methods with placeholder functionality (e.g., return mock data).",
-          "status": "pending",
+          "details": "Create 'server/src/services/user.ts'. Define UserService class with methods: getUserProfile(userId: string) and updateProfile(userId: string, data: any). Implement these methods with placeholder functionality (e.g., return mock data).\n<info added on 2025-05-25T11:25:51.678Z>\nCreated `server/src/services/user.ts` with a placeholder `UserService` class. Implemented `getUserProfile` and `updateProfile` methods returning mock data. The mock data structure has been adjusted to match the `UserResponse` and `ProfileData` schemas from `shared-types`. This ensures consistency between the service layer and the API contracts.\n</info added on 2025-05-25T11:25:51.678Z>",
+          "status": "done",
           "testStrategy": "Unit test UserService class methods with mock data"
         },
         {
