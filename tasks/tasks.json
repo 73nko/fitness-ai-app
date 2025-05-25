@@ -81,7 +81,7 @@
           "description": "Create a new directory for shared types and configure TypeScript",
           "dependencies": [],
           "details": "Create a 'shared-types' directory, initialize npm, install TypeScript and Zod, and set up tsconfig.json",
-          "status": "pending"
+          "status": "done"
         },
         {
           "id": 2,
@@ -91,7 +91,7 @@
             1
           ],
           "details": "Identify core data structures, create Zod schemas for each, ensuring proper validation rules",
-          "status": "pending"
+          "status": "done"
         },
         {
           "id": 3,
@@ -101,7 +101,7 @@
             2
           ],
           "details": "Create a types.ts file, import Zod schemas, and use z.infer<typeof Schema> to generate TypeScript types",
-          "status": "pending"
+          "status": "done"
         },
         {
           "id": 4,
