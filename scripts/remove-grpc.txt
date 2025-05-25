@@ -1,0 +1,133 @@
+# FitnessAI App - gRPC to REST API Migration
+
+## Project Overview
+
+FitnessAI is a mobile and web application that provides AI-generated, personalized training plans for users. The app features adaptive training plans that adjust based on user feedback and progress. The current architecture uses gRPC for communication between the mobile app and backend server.
+
+## Current Architecture
+
+- **Backend**: Fastify with gRPC endpoints
+- **Mobile**: React Native consuming gRPC services
+- **Web**: React
+- **Database**: PostgreSQL with Prisma
+- **AI Integration**: OpenAI APIs for training plan generation and adaptation
+
+The current communication flow uses proto files for service definitions, with clients generated using ts-proto. All backend logic is exposed through gRPC endpoints and accessed via a grpcClient.ts file in the mobile app.
+
+## Problem Statement
+
+While gRPC offers excellent performance benefits, we've identified several challenges:
+
+1. Development complexity: Proto file management and client generation add overhead
+2. Debugging difficulty: gRPC is less accessible for frontend developers to troubleshoot
+3. Integration limitations: Some third-party services work better with REST
+4. Cross-platform consistency: Need better alignment between web and mobile APIs
+
+We've decided to migrate our communication layer from gRPC to a RESTful HTTP API to address these issues.
+
+## Requirements
+
+1. Create a REST API layer that maintains feature parity with the existing gRPC services
+2. Ensure all current functionality remains intact during and after migration
+3. Update the mobile app to use the new REST endpoints
+4. Implement proper error handling and status codes in the REST API
+5. Maintain type safety between backend and frontend
+6. Support the existing authentication flow
+7. Ensure the AI-driven workflow for training plan adaptation remains functional
+
+## Technical Specifications
+
+### Backend Changes:
+
+1. Develop REST endpoints in Fastify that mirror the functionality of existing gRPC services
+2. Create appropriate route handlers for all training plan operations
+3. Implement request validation using JSON schemas
+4. Maintain existing business logic and service layer
+5. Support proper HTTP status codes and error responses
+
+### API Endpoints to Implement:
+
+- `GET /api/training/plan` - Get user's current training plan
+- `POST /api/training/plan/update` - Update a training plan
+- `POST /api/training/feedback` - Submit session feedback
+- `GET /api/training/suggestions` - Generate progression suggestions
+- `GET /api/user/profile` - Get user profile information
+- `PUT /api/user/profile` - Update user profile
+- `POST /api/auth` - Authentication endpoints
+
+### Mobile App Changes:
+
+1. Create a new API client using fetch or Axios
+2. Update all service calls to use the new REST endpoints
+3. Maintain the existing state management through `useTraining()` and `useAuth()`
+4. Update error handling for HTTP-specific errors
+
+## Implementation Plan
+
+1. Create REST API endpoints alongside existing gRPC services
+2. Develop and test API endpoints on the server
+3. Create a REST client in the mobile app
+4. Gradually migrate each feature from gRPC to REST
+5. Validate that AI-driven workflows function correctly
+6. Run both gRPC and REST in parallel during transition
+7. Once all features are migrated and tested, deprecate gRPC endpoints
+
+## Success Criteria
+
+1. All mobile app features function identically using REST APIs
+2. API response times meet or exceed current performance
+3. Type safety is maintained across the application
+4. No regression in user experience or functionality
+5. Simplified development workflow for frontend and backend teams
+6. Improved debugging and testing experience
+
+### Type Safety Plan
+
+- Use a shared TypeScript schema package (`@fitnessai/types`) or `zod`-based schema registry.
+- Backend REST handlers will validate input using `zod` schemas.
+- Auto-generate frontend API types using OpenAPI or manually expose typed client via `ts-rest`, `tRPC`, or OpenAPI-to-TS tools.
+
+### HTTP Error Handling Conventions
+
+- 200 OK — success responses
+- 400 Bad Request — validation or malformed payloads
+- 401 Unauthorized — invalid or missing auth token
+- 404 Not Found — resource missing
+- 500 Internal Server Error — unhandled exceptions
+
+All error responses should return:
+```json
+{
+  "error": "ValidationError",
+  "message": "Missing training plan ID."
+}
+
+---
+
+### 4. 📱 Mobile-Specific Considerations
+
+Mention platform constraints (like why REST helps with React Native limitations).
+
+```md
+### Mobile Constraints
+
+- gRPC’s binary transport is not fully supported in React Native (e.g. XHR errors)
+- Using REST allows cleaner network debugging and error inspection
+- Axios/fetch enables better Expo & Hermes compatibility
+
+### Testing & QA
+
+- Add Jest unit tests for REST handlers
+- Mock REST client in frontend tests (msw or Axios mock adapter)
+- Write integration tests for each new REST endpoint
+- Confirm that AI workflows (generate/update plans) remain intact
+
+CI must run both REST and gRPC tests until migration is finalized.
+
+### Deprecation & Cleanup
+
+- REST endpoints built, tested, and used in parallel
+- Remove `grpcClient.ts` from mobile, delete proto usage
+- Remove unused `.proto` files
+- Remove ts-proto and grpc-related dev dependencies
+- Archive gRPC handlers (mark as deprecated before deletion)
