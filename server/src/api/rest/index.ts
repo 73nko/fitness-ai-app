@@ -1,6 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import cors from '@fastify/cors';
 import { customRequestLogger } from './middleware/requestLogger';
+import { registerErrorHandler } from './middleware/errorHandler';
 
 // Placeholder for future route imports
 // import { trainingRoutes } from './routes/training';
@@ -22,17 +23,10 @@ export function setupRestApi(app: FastifyInstance) {
   // app.register(userRoutes, { prefix: '/api/user' });
   // app.register(authRoutes, { prefix: '/api/auth' });
 
-  // Error handler
-  app.setErrorHandler((error, request, reply) => {
-    request.log.error(error);
-    const statusCode = error.statusCode || 500;
-    reply.status(statusCode).send({
-      error: error.name || 'InternalServerError',
-      message: error.message || 'An unknown error occurred',
-    });
-  });
+  // Register custom error handler
+  registerErrorHandler(app);
 
   app.log.info(
-    'REST API setup complete with CORS, custom logging, and error handling.'
+    'REST API setup complete with CORS, custom logging, and custom error handling.'
   );
 }

@@ -1,6 +1,6 @@
 # Task ID: 1
 # Title: Create REST API Endpoint Structure
-# Status: pending
+# Status: done
 # Dependencies: None
 # Priority: high
 # Description: Set up the basic structure for REST API endpoints in the Fastify server alongside existing gRPC services.
@@ -74,7 +74,7 @@ Use the '@fastify/cors' plugin to configure CORS settings. Set up options to all
 ### Details:
 Develop a custom middleware function that logs relevant information for each incoming request, such as method, URL, headers, and body (if applicable). Integrate this middleware into the Fastify server configuration.
 
-## 5. Set Up Error Handling Middleware [pending]
+## 5. Set Up Error Handling Middleware [done]
 ### Dependencies: 1.2
 ### Description: Implement error handling middleware for the REST API to manage and respond to various types of errors consistently.
 ### Details:

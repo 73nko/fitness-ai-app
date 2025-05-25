@@ -8,7 +8,7 @@
       "testStrategy": "1. Unit test the router setup and configuration\n2. Test that CORS is properly configured\n3. Verify error handling middleware catches and formats errors correctly\n4. Ensure all route prefixes are registered correctly",
       "priority": "high",
       "dependencies": [],
-      "status": "pending",
+      "status": "done",
       "subtasks": [
         {
           "id": 1,
@@ -60,7 +60,7 @@
             2
           ],
           "details": "Create an error handling function that catches both synchronous and asynchronous errors. Implement logic to determine appropriate status codes and error messages. Integrate this handler using Fastify's setErrorHandler method.",
-          "status": "pending",
+          "status": "done",
           "testStrategy": "Write unit tests for the error handler function with various error scenarios. Perform integration tests to ensure proper error responses are sent for different types of errors (e.g., 404, 500)."
         }
       ]

@@ -9,6 +9,7 @@ export function customRequestLogger(app: FastifyInstance) {
         method: request.method,
         url: request.url,
         ip: request.ip,
+        // TODO: Add more sophisticated request logging here,
         // Headers can be verbose, log selectively or a summary if needed
         // For example, to log specific headers:
         // userAgent: request.headers['user-agent'],
