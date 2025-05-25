@@ -253,7 +253,62 @@
         3
       ],
       "status": "pending",
-      "subtasks": []
+      "subtasks": [
+        {
+          "id": 1,
+          "title": "Set up route file for /api/user",
+          "description": "Create a new file for user profile routes and set up the basic structure",
+          "dependencies": [],
+          "details": "Create a new file 'src/api/rest/routes/user.ts'. Import necessary modules (FastifyInstance, UserService). Define and export an async function 'userRoutes' that takes a FastifyInstance parameter.",
+          "status": "pending",
+          "testStrategy": "Verify file creation and basic structure with imports and exported function"
+        },
+        {
+          "id": 2,
+          "title": "Create placeholder UserService",
+          "description": "Implement a basic UserService class with placeholder methods for profile operations",
+          "dependencies": [],
+          "details": "Create 'src/services/user.ts'. Define UserService class with methods: getUserProfile(userId: string) and updateProfile(userId: string, data: any). Implement these methods with placeholder functionality (e.g., return mock data).",
+          "status": "pending",
+          "testStrategy": "Unit test UserService class methods with mock data"
+        },
+        {
+          "id": 3,
+          "title": "Implement GET /profile endpoint",
+          "description": "Create a GET endpoint for retrieving user profiles",
+          "dependencies": [
+            1,
+            2
+          ],
+          "details": "In userRoutes function, add fastify.get('/profile', ...) route. Use authenticate middleware. Implement handler to call userService.getUserProfile(). Return 404 if profile not found, otherwise return profile data.",
+          "status": "pending",
+          "testStrategy": "Integration test GET /profile with authenticated and unauthenticated requests"
+        },
+        {
+          "id": 4,
+          "title": "Implement PUT /profile endpoint",
+          "description": "Create a PUT endpoint for updating user profiles",
+          "dependencies": [
+            1,
+            2
+          ],
+          "details": "In userRoutes function, add fastify.put('/profile', ...) route. Use authenticate middleware and UpdateProfileSchema for request body validation. Implement handler to call userService.updateProfile(). Return updated profile data.",
+          "status": "pending",
+          "testStrategy": "Integration test PUT /profile with valid and invalid data, authenticated and unauthenticated requests"
+        },
+        {
+          "id": 5,
+          "title": "Apply authentication middleware",
+          "description": "Ensure authentication middleware is correctly applied to both endpoints",
+          "dependencies": [
+            3,
+            4
+          ],
+          "details": "Review both GET and PUT /profile routes. Confirm 'authenticate' middleware is included in the 'preHandler' array for each route. Test that unauthenticated requests are properly rejected.",
+          "status": "pending",
+          "testStrategy": "Verify middleware application by attempting unauthenticated requests to both endpoints"
+        }
+      ]
     },
     {
       "id": 5,

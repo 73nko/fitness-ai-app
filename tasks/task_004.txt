@@ -55,3 +55,35 @@ export async function userRoutes(fastify: FastifyInstance) {
 3. Test successful profile retrieval and updates
 4. Test error cases (user not found, validation errors)
 5. Verify database interactions
+
+# Subtasks:
+## 1. Set up route file for /api/user [pending]
+### Dependencies: None
+### Description: Create a new file for user profile routes and set up the basic structure
+### Details:
+Create a new file 'src/api/rest/routes/user.ts'. Import necessary modules (FastifyInstance, UserService). Define and export an async function 'userRoutes' that takes a FastifyInstance parameter.
+
+## 2. Create placeholder UserService [pending]
+### Dependencies: None
+### Description: Implement a basic UserService class with placeholder methods for profile operations
+### Details:
+Create 'src/services/user.ts'. Define UserService class with methods: getUserProfile(userId: string) and updateProfile(userId: string, data: any). Implement these methods with placeholder functionality (e.g., return mock data).
+
+## 3. Implement GET /profile endpoint [pending]
+### Dependencies: 4.1, 4.2
+### Description: Create a GET endpoint for retrieving user profiles
+### Details:
+In userRoutes function, add fastify.get('/profile', ...) route. Use authenticate middleware. Implement handler to call userService.getUserProfile(). Return 404 if profile not found, otherwise return profile data.
+
+## 4. Implement PUT /profile endpoint [pending]
+### Dependencies: 4.1, 4.2
+### Description: Create a PUT endpoint for updating user profiles
+### Details:
+In userRoutes function, add fastify.put('/profile', ...) route. Use authenticate middleware and UpdateProfileSchema for request body validation. Implement handler to call userService.updateProfile(). Return updated profile data.
+
+## 5. Apply authentication middleware [pending]
+### Dependencies: 4.3, 4.4
+### Description: Ensure authentication middleware is correctly applied to both endpoints
+### Details:
+Review both GET and PUT /profile routes. Confirm 'authenticate' middleware is included in the 'preHandler' array for each route. Test that unauthenticated requests are properly rejected.
+
