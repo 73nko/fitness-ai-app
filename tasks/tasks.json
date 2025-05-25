@@ -73,7 +73,7 @@
       "testStrategy": "1. Write unit tests for schema validation\n2. Test edge cases for each schema\n3. Verify type inference works correctly\n4. Test schema composition for complex objects",
       "priority": "high",
       "dependencies": [],
-      "status": "pending",
+      "status": "done",
       "subtasks": [
         {
           "id": 1,
@@ -181,7 +181,7 @@
         1,
         2
       ],
-      "status": "pending",
+      "status": "done",
       "subtasks": [
         {
           "id": 1,
@@ -234,8 +234,8 @@
             3,
             4
           ],
-          "details": "Create a new file `authMiddleware.ts` in the `/api/rest/middleware` directory. Implement a function that verifies the JWT token from the Authorization header. Use the same token verification logic as in the gRPC implementation. Return 401 Unauthorized for invalid tokens. Attach the decoded user information to the request object for use in protected routes.",
-          "status": "pending",
+          "details": "Create a new file `authMiddleware.ts` in the `/api/rest/middleware` directory. Implement a function that verifies the JWT token from the Authorization header. Use the same token verification logic as in the gRPC implementation. Return 401 Unauthorized for invalid tokens. Attach the decoded user information to the request object for use in protected routes.\n<info added on 2025-05-25T11:18:15.116Z>\nThe `authMiddleware.ts` file has been created in `server/src/api/rest/middleware/`. The middleware implements JWT token verification using `request.server.jwt.extractToken` and `request.server.jwt.verify` from the existing `jwt.ts` plugin. On successful verification, it attaches an `AuthenticatedUser` object (derived from `JwtPayload`) to `request.user`. For failed authentication, it sends a 401 error. The next step is to register this middleware in the Fastify application for protected routes.\n</info added on 2025-05-25T11:18:15.116Z>",
+          "status": "done",
           "testStrategy": "Write unit tests for the middleware and integration tests with protected routes"
         }
       ]

@@ -1,6 +1,6 @@
 # Task ID: 3
 # Title: Implement Authentication REST Endpoints
-# Status: pending
+# Status: done
 # Dependencies: 1, 2
 # Priority: high
 # Description: Create REST endpoints for authentication that mirror the existing gRPC authentication service.
@@ -98,9 +98,12 @@ Inside the `authRoutes` function, implement a POST route for '/refresh-token'. V
 The token refresh endpoint has been implemented in `server/src/api/rest/routes/auth.ts`. It uses an inline Zod schema (`RefreshTokenRequestSchema`) for request body validation and calls `authService.refreshToken()`. The implementation includes success (200) and error handling (401 for invalid token, 500 for server error). The Zod import (`import { z } from 'zod';`) was added to the file. If linter errors for 'zod' module not found persist, ensure Zod is installed and resolvable in the server project environment.
 </info added on 2025-05-25T11:16:03.122Z>
 
-## 5. Implement authentication middleware [pending]
+## 5. Implement authentication middleware [done]
 ### Dependencies: 3.2, 3.3, 3.4
 ### Description: Create middleware for verifying JWT tokens on protected routes
 ### Details:
 Create a new file `authMiddleware.ts` in the `/api/rest/middleware` directory. Implement a function that verifies the JWT token from the Authorization header. Use the same token verification logic as in the gRPC implementation. Return 401 Unauthorized for invalid tokens. Attach the decoded user information to the request object for use in protected routes.
+<info added on 2025-05-25T11:18:15.116Z>
+The `authMiddleware.ts` file has been created in `server/src/api/rest/middleware/`. The middleware implements JWT token verification using `request.server.jwt.extractToken` and `request.server.jwt.verify` from the existing `jwt.ts` plugin. On successful verification, it attaches an `AuthenticatedUser` object (derived from `JwtPayload`) to `request.user`. For failed authentication, it sends a 401 error. The next step is to register this middleware in the Fastify application for protected routes.
+</info added on 2025-05-25T11:18:15.116Z>
 
