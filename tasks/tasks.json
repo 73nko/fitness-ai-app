@@ -122,7 +122,7 @@
             "2.4"
           ],
           "details": "This is a parent task for the integration steps. See sub-tasks.",
-          "status": "pending",
+          "status": "done",
           "subtasks": [
             {
               "id": 1,
