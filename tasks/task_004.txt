@@ -1,6 +1,6 @@
 # Task ID: 4
 # Title: Implement User Profile REST Endpoints
-# Status: pending
+# Status: done
 # Dependencies: 1, 2, 3
 # Priority: medium
 # Description: Create REST endpoints for user profile operations that mirror the existing gRPC user service.
@@ -57,7 +57,7 @@ export async function userRoutes(fastify: FastifyInstance) {
 5. Verify database interactions
 
 # Subtasks:
-## 1. Set up route file for /api/user [pending]
+## 1. Set up route file for /api/user [done]
 ### Dependencies: None
 ### Description: Create a new file for user profile routes and set up the basic structure
 ### Details:
@@ -90,9 +90,12 @@ In userRoutes function, add fastify.put('/profile', ...) route. Use authenticate
 Implemented PUT /profile endpoint in server/src/api/rest/routes/user.ts. Route uses authMiddleware for authentication and UpdateProfileRequestSchema for request body validation. Handler calls userService.updateProfile() and returns updated profile data on success. Added 404 error response if user/profile is not found or update fails. Implemented basic error handling. Resolved type incompatibility issues between request body and schema validation.
 </info added on 2025-05-25T11:27:25.926Z>
 
-## 5. Apply authentication middleware [pending]
+## 5. Apply authentication middleware [done]
 ### Dependencies: 4.3, 4.4
 ### Description: Ensure authentication middleware is correctly applied to both endpoints
 ### Details:
 Review both GET and PUT /profile routes. Confirm 'authenticate' middleware is included in the 'preHandler' array for each route. Test that unauthenticated requests are properly rejected.
+<info added on 2025-05-25T11:28:11.063Z>
+Confirmation: `authMiddleware` is applied to both GET and PUT /profile routes in `server/src/api/rest/routes/user.ts`. This was verified during the implementation of subtasks 4.3 and 4.4. Authentication middleware is correctly in place for these profile-related endpoints.
+</info added on 2025-05-25T11:28:11.063Z>
 
