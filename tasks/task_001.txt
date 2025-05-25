@@ -1,0 +1,82 @@
+# Task ID: 1
+# Title: Create REST API Endpoint Structure
+# Status: pending
+# Dependencies: None
+# Priority: high
+# Description: Set up the basic structure for REST API endpoints in the Fastify server alongside existing gRPC services.
+# Details:
+1. Create a new directory structure for REST endpoints in the Fastify server
+2. Set up base router configuration
+3. Configure CORS for REST endpoints
+4. Implement basic middleware for request logging
+5. Set up error handling middleware
+
+Example structure:
+```typescript
+// src/api/rest/index.ts
+import fastify from 'fastify';
+import cors from '@fastify/cors';
+import { trainingRoutes } from './routes/training';
+import { userRoutes } from './routes/user';
+import { authRoutes } from './routes/auth';
+
+export function setupRestApi(app) {
+  // Register plugins
+  app.register(cors, { 
+    origin: true, // or specify domains
+    credentials: true
+  });
+  
+  // Register routes
+  app.register(trainingRoutes, { prefix: '/api/training' });
+  app.register(userRoutes, { prefix: '/api/user' });
+  app.register(authRoutes, { prefix: '/api/auth' });
+  
+  // Error handler
+  app.setErrorHandler((error, request, reply) => {
+    const statusCode = error.statusCode || 500;
+    reply.status(statusCode).send({
+      error: error.name || 'InternalServerError',
+      message: error.message || 'An unknown error occurred'
+    });
+  });
+}
+```
+
+# Test Strategy:
+1. Unit test the router setup and configuration
+2. Test that CORS is properly configured
+3. Verify error handling middleware catches and formats errors correctly
+4. Ensure all route prefixes are registered correctly
+
+# Subtasks:
+## 1. Create REST API Directory Structure [pending]
+### Dependencies: None
+### Description: Set up a new directory structure for REST API endpoints within the Fastify server project.
+### Details:
+Create a new 'rest' directory under 'src/api'. Within 'rest', create subdirectories for 'routes', 'middleware', and 'controllers'. This structure will separate concerns and improve code organization.
+
+## 2. Implement Base Router Configuration [pending]
+### Dependencies: 1.1
+### Description: Set up the base router configuration for REST endpoints in the Fastify server.
+### Details:
+Create an 'index.ts' file in the 'src/api/rest' directory. Implement a 'setupRestApi' function that initializes Fastify plugins, registers route handlers, and sets up basic configurations like CORS and error handling.
+
+## 3. Configure CORS for REST Endpoints [pending]
+### Dependencies: 1.2
+### Description: Implement CORS (Cross-Origin Resource Sharing) configuration for the REST API endpoints.
+### Details:
+Use the '@fastify/cors' plugin to configure CORS settings. Set up options to allow specific origins or use a wildcard. Ensure credentials are properly handled if required.
+
+## 4. Implement Request Logging Middleware [pending]
+### Dependencies: 1.2
+### Description: Create and integrate middleware for logging incoming REST API requests.
+### Details:
+Develop a custom middleware function that logs relevant information for each incoming request, such as method, URL, headers, and body (if applicable). Integrate this middleware into the Fastify server configuration.
+
+## 5. Set Up Error Handling Middleware [pending]
+### Dependencies: 1.2
+### Description: Implement error handling middleware for the REST API to manage and respond to various types of errors consistently.
+### Details:
+Create an error handling function that catches both synchronous and asynchronous errors. Implement logic to determine appropriate status codes and error messages. Integrate this handler using Fastify's setErrorHandler method.
+

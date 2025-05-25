@@ -1,0 +1,48 @@
+# Task ID: 6
+# Title: Implement Training Feedback REST Endpoints
+# Status: pending
+# Dependencies: 1, 2, 3, 5
+# Priority: medium
+# Description: Create REST endpoints for submitting training session feedback that mirror the existing gRPC feedback service.
+# Details:
+1. Create feedback submission endpoint in `/api/training/feedback`
+2. Ensure proper validation of feedback data
+3. Maintain connection to AI adaptation workflow
+
+Example implementation:
+```typescript
+// src/api/rest/routes/training.ts (continued)
+import { FeedbackSchema } from '@fitnessai/types';
+
+// Inside trainingRoutes function
+fastify.post('/feedback', {
+  schema: {
+    body: FeedbackSchema
+  },
+  preHandler: [authenticate],
+  handler: async (request, reply) => {
+    const userId = request.user.id;
+    const { sessionId, feedback } = request.body;
+    
+    try {
+      const result = await trainingService.submitFeedback(userId, sessionId, feedback);
+      return reply.send(result);
+    } catch (error) {
+      if (error.message === 'Session not found') {
+        return reply.status(404).send({
+          error: 'NotFound',
+          message: 'Training session not found'
+        });
+      }
+      throw error;
+    }
+  }
+});
+```
+
+# Test Strategy:
+1. Unit test the feedback submission endpoint
+2. Test validation of different feedback types
+3. Test error cases (session not found, invalid feedback)
+4. Verify that feedback is properly stored
+5. Test integration with AI adaptation service

@@ -1,0 +1,46 @@
+# Task ID: 2
+# Title: Implement Shared Type Definitions
+# Status: pending
+# Dependencies: None
+# Priority: high
+# Description: Create a shared type system between backend and frontend to maintain type safety during the migration.
+# Details:
+1. Create or update the `@fitnessai/types` package with shared interfaces
+2. Implement Zod schemas for request/response validation
+3. Export TypeScript types derived from Zod schemas
+
+Example implementation:
+```typescript
+// packages/types/src/training.ts
+import { z } from 'zod';
+
+export const TrainingPlanSchema = z.object({
+  id: z.string().uuid(),
+  userId: z.string().uuid(),
+  name: z.string(),
+  weeks: z.array(z.object({
+    weekNumber: z.number(),
+    sessions: z.array(z.object({
+      day: z.number(),
+      exercises: z.array(z.object({
+        name: z.string(),
+        sets: z.number(),
+        reps: z.number(),
+        weight: z.number().optional()
+      }))
+    }))
+  })),
+  createdAt: z.string().datetime(),
+  updatedAt: z.string().datetime()
+});
+
+export type TrainingPlan = z.infer<typeof TrainingPlanSchema>;
+
+// Similar schemas for feedback, suggestions, etc.
+```
+
+# Test Strategy:
+1. Write unit tests for schema validation
+2. Test edge cases for each schema
+3. Verify type inference works correctly
+4. Test schema composition for complex objects

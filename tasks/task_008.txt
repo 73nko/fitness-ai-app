@@ -1,0 +1,92 @@
+# Task ID: 8
+# Title: Create REST API Client for Mobile App
+# Status: pending
+# Dependencies: 2, 3, 4, 5, 6, 7
+# Priority: high
+# Description: Develop a REST API client for the mobile app to replace the existing gRPC client.
+# Details:
+1. Create a new API client using Axios or fetch
+2. Implement methods for all REST endpoints
+3. Handle authentication token management
+4. Implement proper error handling
+
+Example implementation:
+```typescript
+// src/api/restClient.ts
+import axios from 'axios';
+import { API_BASE_URL } from '../config';
+import { TrainingPlan, UserProfile, LoginResponse } from '@fitnessai/types';
+
+class ApiClient {
+  private token: string | null = null;
+  private axiosInstance = axios.create({
+    baseURL: API_BASE_URL,
+    headers: {
+      'Content-Type': 'application/json'
+    }
+  });
+  
+  constructor() {
+    // Add request interceptor for auth token
+    this.axiosInstance.interceptors.request.use(config => {
+      if (this.token) {
+        config.headers.Authorization = `Bearer ${this.token}`;
+      }
+      return config;
+    });
+    
+    // Add response interceptor for error handling
+    this.axiosInstance.interceptors.response.use(
+      response => response.data,
+      error => {
+        if (error.response) {
+          // Format error based on response
+          return Promise.reject({
+            status: error.response.status,
+            ...error.response.data
+          });
+        }
+        return Promise.reject({
+          message: 'Network error',
+          error: 'NetworkError'
+        });
+      }
+    );
+  }
+  
+  setToken(token: string) {
+    this.token = token;
+  }
+  
+  clearToken() {
+    this.token = null;
+  }
+  
+  // Auth methods
+  async login(email: string, password: string): Promise<LoginResponse> {
+    const response = await this.axiosInstance.post('/api/auth/login', { email, password });
+    this.setToken(response.token);
+    return response;
+  }
+  
+  // Training methods
+  async getTrainingPlan(): Promise<TrainingPlan> {
+    return this.axiosInstance.get('/api/training/plan');
+  }
+  
+  async updateTrainingPlan(plan: Partial<TrainingPlan>): Promise<TrainingPlan> {
+    return this.axiosInstance.post('/api/training/plan/update', plan);
+  }
+  
+  // Additional methods for other endpoints...
+}
+
+export const apiClient = new ApiClient();
+```
+
+# Test Strategy:
+1. Unit test the API client methods
+2. Mock API responses using axios-mock-adapter
+3. Test authentication token management
+4. Test error handling for different HTTP status codes
+5. Test retry logic for network failures

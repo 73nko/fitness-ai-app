@@ -1,0 +1,43 @@
+# Task ID: 7
+# Title: Implement Training Suggestions REST Endpoint
+# Status: pending
+# Dependencies: 1, 2, 3, 5
+# Priority: medium
+# Description: Create REST endpoint for generating training progression suggestions that integrates with the OpenAI API.
+# Details:
+1. Create suggestions endpoint in `/api/training/suggestions`
+2. Ensure proper integration with OpenAI API
+3. Maintain existing business logic for suggestion generation
+
+Example implementation:
+```typescript
+// src/api/rest/routes/training.ts (continued)
+
+// Inside trainingRoutes function
+fastify.get('/suggestions', {
+  preHandler: [authenticate],
+  handler: async (request, reply) => {
+    const userId = request.user.id;
+    
+    try {
+      const suggestions = await trainingService.generateSuggestions(userId);
+      return reply.send(suggestions);
+    } catch (error) {
+      if (error.message === 'No training data available') {
+        return reply.status(400).send({
+          error: 'InsufficientData',
+          message: 'Not enough training data to generate suggestions'
+        });
+      }
+      throw error;
+    }
+  }
+});
+```
+
+# Test Strategy:
+1. Unit test the suggestions endpoint
+2. Mock OpenAI API responses for testing
+3. Test error cases (insufficient data, API failures)
+4. Verify that suggestions are properly formatted
+5. Test integration with the training plan service

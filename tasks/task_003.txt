@@ -1,0 +1,53 @@
+# Task ID: 3
+# Title: Implement Authentication REST Endpoints
+# Status: pending
+# Dependencies: 1, 2
+# Priority: high
+# Description: Create REST endpoints for authentication that mirror the existing gRPC authentication service.
+# Details:
+1. Create authentication routes in `/api/auth`
+2. Implement login, registration, and token refresh endpoints
+3. Ensure JWT token generation matches existing gRPC implementation
+4. Implement proper HTTP status codes for auth failures
+
+Example implementation:
+```typescript
+// src/api/rest/routes/auth.ts
+import { FastifyInstance } from 'fastify';
+import { AuthService } from '../../../services/auth';
+import { LoginSchema, RegisterSchema } from '@fitnessai/types';
+
+export async function authRoutes(fastify: FastifyInstance) {
+  const authService = new AuthService();
+  
+  fastify.post('/login', {
+    schema: {
+      body: LoginSchema
+    },
+    handler: async (request, reply) => {
+      try {
+        const { email, password } = request.body;
+        const result = await authService.login(email, password);
+        return reply.status(200).send(result);
+      } catch (error) {
+        if (error.message === 'Invalid credentials') {
+          return reply.status(401).send({
+            error: 'AuthenticationError',
+            message: 'Invalid email or password'
+          });
+        }
+        throw error;
+      }
+    }
+  });
+  
+  // Similar endpoints for register, refresh-token, etc.
+}
+```
+
+# Test Strategy:
+1. Unit test each authentication endpoint
+2. Test successful login/registration flows
+3. Test error cases (invalid credentials, already registered)
+4. Verify JWT token generation and validation
+5. Test token refresh functionality

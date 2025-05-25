@@ -1,0 +1,76 @@
+# Task ID: 9
+# Title: Update Mobile App Authentication Flow
+# Status: pending
+# Dependencies: 3, 8
+# Priority: high
+# Description: Modify the mobile app's authentication flow to use the new REST API client instead of gRPC.
+# Details:
+1. Update the `useAuth()` hook to use the REST API client
+2. Maintain the same interface for authentication state
+3. Update token storage and refresh mechanisms
+
+Example implementation:
+```typescript
+// src/hooks/useAuth.ts
+import { useState, useEffect, useCallback } from 'react';
+import { apiClient } from '../api/restClient';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+export function useAuth() {
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  
+  // Load saved token on startup
+  useEffect(() => {
+    async function loadToken() {
+      try {
+        const token = await AsyncStorage.getItem('auth_token');
+        if (token) {
+          apiClient.setToken(token);
+          const userProfile = await apiClient.getUserProfile();
+          setUser(userProfile);
+        }
+      } catch (err) {
+        console.error('Failed to load auth state', err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    
+    loadToken();
+  }, []);
+  
+  const login = useCallback(async (email, password) => {
+    setLoading(true);
+    setError(null);
+    
+    try {
+      const response = await apiClient.login(email, password);
+      await AsyncStorage.setItem('auth_token', response.token);
+      setUser(response.user);
+      return response.user;
+    } catch (err) {
+      setError(err.message || 'Login failed');
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+  
+  const logout = useCallback(async () => {
+    await AsyncStorage.removeItem('auth_token');
+    apiClient.clearToken();
+    setUser(null);
+  }, []);
+  
+  return { user, loading, error, login, logout };
+}
+```
+
+# Test Strategy:
+1. Unit test the authentication hook
+2. Test login, logout, and token persistence
+3. Test error handling for authentication failures
+4. Test automatic token loading on app start
+5. Integration test with the REST API client

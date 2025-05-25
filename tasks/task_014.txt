@@ -1,0 +1,93 @@
+# Task ID: 14
+# Title: Implement Feature Flag for API Selection in Mobile App
+# Status: pending
+# Dependencies: 8, 9, 10, 11
+# Priority: medium
+# Description: Add a feature flag system to the mobile app to control which API (gRPC or REST) is used.
+# Details:
+1. Create a feature flag system for API selection
+2. Implement a factory pattern for API client creation
+3. Allow remote configuration of the active API
+
+Example implementation:
+```typescript
+// src/config/featureFlags.ts
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+export enum ApiType {
+  GRPC = 'grpc',
+  REST = 'rest'
+}
+
+class FeatureFlags {
+  private flags: Record<string, any> = {
+    apiType: ApiType.GRPC // Default to gRPC initially
+  };
+  
+  async initialize() {
+    try {
+      // Load saved flags
+      const savedFlags = await AsyncStorage.getItem('feature_flags');
+      if (savedFlags) {
+        this.flags = { ...this.flags, ...JSON.parse(savedFlags) };
+      }
+      
+      // Could also fetch remote flags here
+      // const remoteFlags = await fetchRemoteFlags();
+      // this.flags = { ...this.flags, ...remoteFlags };
+      
+      // Save merged flags
+      await this.saveFlags();
+    } catch (error) {
+      console.error('Failed to initialize feature flags', error);
+    }
+  }
+  
+  async saveFlags() {
+    await AsyncStorage.setItem('feature_flags', JSON.stringify(this.flags));
+  }
+  
+  getApiType(): ApiType {
+    return this.flags.apiType;
+  }
+  
+  async setApiType(type: ApiType) {
+    this.flags.apiType = type;
+    await this.saveFlags();
+  }
+}
+
+export const featureFlags = new FeatureFlags();
+
+// src/api/clientFactory.ts
+import { featureFlags, ApiType } from '../config/featureFlags';
+import { grpcClient } from './grpcClient';
+import { apiClient } from './restClient';
+
+export function getApiClient() {
+  const apiType = featureFlags.getApiType();
+  
+  switch (apiType) {
+    case ApiType.REST:
+      return apiClient;
+    case ApiType.GRPC:
+    default:
+      return grpcClient;
+  }
+}
+
+// Usage in hooks
+import { getApiClient } from '../api/clientFactory';
+
+export function useAuth() {
+  const client = getApiClient();
+  // Use client for API calls
+}
+```
+
+# Test Strategy:
+1. Test feature flag initialization and persistence
+2. Test API client factory with different flag values
+3. Test runtime switching between API types
+4. Verify that the correct client is used based on the flag
+5. Test remote configuration of flags if implemented

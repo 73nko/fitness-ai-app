@@ -1,0 +1,288 @@
+{
+  "tasks": [
+    {
+      "id": 1,
+      "title": "Create REST API Endpoint Structure",
+      "description": "Set up the basic structure for REST API endpoints in the Fastify server alongside existing gRPC services.",
+      "details": "1. Create a new directory structure for REST endpoints in the Fastify server\n2. Set up base router configuration\n3. Configure CORS for REST endpoints\n4. Implement basic middleware for request logging\n5. Set up error handling middleware\n\nExample structure:\n```typescript\n// src/api/rest/index.ts\nimport fastify from 'fastify';\nimport cors from '@fastify/cors';\nimport { trainingRoutes } from './routes/training';\nimport { userRoutes } from './routes/user';\nimport { authRoutes } from './routes/auth';\n\nexport function setupRestApi(app) {\n  // Register plugins\n  app.register(cors, { \n    origin: true, // or specify domains\n    credentials: true\n  });\n  \n  // Register routes\n  app.register(trainingRoutes, { prefix: '/api/training' });\n  app.register(userRoutes, { prefix: '/api/user' });\n  app.register(authRoutes, { prefix: '/api/auth' });\n  \n  // Error handler\n  app.setErrorHandler((error, request, reply) => {\n    const statusCode = error.statusCode || 500;\n    reply.status(statusCode).send({\n      error: error.name || 'InternalServerError',\n      message: error.message || 'An unknown error occurred'\n    });\n  });\n}\n```",
+      "testStrategy": "1. Unit test the router setup and configuration\n2. Test that CORS is properly configured\n3. Verify error handling middleware catches and formats errors correctly\n4. Ensure all route prefixes are registered correctly",
+      "priority": "high",
+      "dependencies": [],
+      "status": "pending",
+      "subtasks": [
+        {
+          "id": 1,
+          "title": "Create REST API Directory Structure",
+          "description": "Set up a new directory structure for REST API endpoints within the Fastify server project.",
+          "dependencies": [],
+          "details": "Create a new 'rest' directory under 'src/api'. Within 'rest', create subdirectories for 'routes', 'middleware', and 'controllers'. This structure will separate concerns and improve code organization.",
+          "status": "pending",
+          "testStrategy": "Verify the existence and correct structure of the newly created directories using file system checks in a unit test."
+        },
+        {
+          "id": 2,
+          "title": "Implement Base Router Configuration",
+          "description": "Set up the base router configuration for REST endpoints in the Fastify server.",
+          "dependencies": [
+            1
+          ],
+          "details": "Create an 'index.ts' file in the 'src/api/rest' directory. Implement a 'setupRestApi' function that initializes Fastify plugins, registers route handlers, and sets up basic configurations like CORS and error handling.",
+          "status": "pending",
+          "testStrategy": "Write integration tests to ensure the base router is properly configured and can handle basic requests."
+        },
+        {
+          "id": 3,
+          "title": "Configure CORS for REST Endpoints",
+          "description": "Implement CORS (Cross-Origin Resource Sharing) configuration for the REST API endpoints.",
+          "dependencies": [
+            2
+          ],
+          "details": "Use the '@fastify/cors' plugin to configure CORS settings. Set up options to allow specific origins or use a wildcard. Ensure credentials are properly handled if required.",
+          "status": "pending",
+          "testStrategy": "Create unit tests to verify CORS headers are properly set on responses. Include tests for both allowed and disallowed origins."
+        },
+        {
+          "id": 4,
+          "title": "Implement Request Logging Middleware",
+          "description": "Create and integrate middleware for logging incoming REST API requests.",
+          "dependencies": [
+            2
+          ],
+          "details": "Develop a custom middleware function that logs relevant information for each incoming request, such as method, URL, headers, and body (if applicable). Integrate this middleware into the Fastify server configuration.",
+          "status": "pending",
+          "testStrategy": "Use mock objects to test if the logging middleware correctly captures and formats request information. Verify log output in integration tests."
+        },
+        {
+          "id": 5,
+          "title": "Set Up Error Handling Middleware",
+          "description": "Implement error handling middleware for the REST API to manage and respond to various types of errors consistently.",
+          "dependencies": [
+            2
+          ],
+          "details": "Create an error handling function that catches both synchronous and asynchronous errors. Implement logic to determine appropriate status codes and error messages. Integrate this handler using Fastify's setErrorHandler method.",
+          "status": "pending",
+          "testStrategy": "Write unit tests for the error handler function with various error scenarios. Perform integration tests to ensure proper error responses are sent for different types of errors (e.g., 404, 500)."
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Implement Shared Type Definitions",
+      "description": "Create a shared type system between backend and frontend to maintain type safety during the migration.",
+      "details": "1. Create or update the `@fitnessai/types` package with shared interfaces\n2. Implement Zod schemas for request/response validation\n3. Export TypeScript types derived from Zod schemas\n\nExample implementation:\n```typescript\n// packages/types/src/training.ts\nimport { z } from 'zod';\n\nexport const TrainingPlanSchema = z.object({\n  id: z.string().uuid(),\n  userId: z.string().uuid(),\n  name: z.string(),\n  weeks: z.array(z.object({\n    weekNumber: z.number(),\n    sessions: z.array(z.object({\n      day: z.number(),\n      exercises: z.array(z.object({\n        name: z.string(),\n        sets: z.number(),\n        reps: z.number(),\n        weight: z.number().optional()\n      }))\n    }))\n  })),\n  createdAt: z.string().datetime(),\n  updatedAt: z.string().datetime()\n});\n\nexport type TrainingPlan = z.infer<typeof TrainingPlanSchema>;\n\n// Similar schemas for feedback, suggestions, etc.\n```",
+      "testStrategy": "1. Write unit tests for schema validation\n2. Test edge cases for each schema\n3. Verify type inference works correctly\n4. Test schema composition for complex objects",
+      "priority": "high",
+      "dependencies": [],
+      "status": "pending",
+      "subtasks": []
+    },
+    {
+      "id": 3,
+      "title": "Implement Authentication REST Endpoints",
+      "description": "Create REST endpoints for authentication that mirror the existing gRPC authentication service.",
+      "details": "1. Create authentication routes in `/api/auth`\n2. Implement login, registration, and token refresh endpoints\n3. Ensure JWT token generation matches existing gRPC implementation\n4. Implement proper HTTP status codes for auth failures\n\nExample implementation:\n```typescript\n// src/api/rest/routes/auth.ts\nimport { FastifyInstance } from 'fastify';\nimport { AuthService } from '../../../services/auth';\nimport { LoginSchema, RegisterSchema } from '@fitnessai/types';\n\nexport async function authRoutes(fastify: FastifyInstance) {\n  const authService = new AuthService();\n  \n  fastify.post('/login', {\n    schema: {\n      body: LoginSchema\n    },\n    handler: async (request, reply) => {\n      try {\n        const { email, password } = request.body;\n        const result = await authService.login(email, password);\n        return reply.status(200).send(result);\n      } catch (error) {\n        if (error.message === 'Invalid credentials') {\n          return reply.status(401).send({\n            error: 'AuthenticationError',\n            message: 'Invalid email or password'\n          });\n        }\n        throw error;\n      }\n    }\n  });\n  \n  // Similar endpoints for register, refresh-token, etc.\n}\n```",
+      "testStrategy": "1. Unit test each authentication endpoint\n2. Test successful login/registration flows\n3. Test error cases (invalid credentials, already registered)\n4. Verify JWT token generation and validation\n5. Test token refresh functionality",
+      "priority": "high",
+      "dependencies": [
+        1,
+        2
+      ],
+      "status": "pending",
+      "subtasks": []
+    },
+    {
+      "id": 4,
+      "title": "Implement User Profile REST Endpoints",
+      "description": "Create REST endpoints for user profile operations that mirror the existing gRPC user service.",
+      "details": "1. Create user profile routes in `/api/user`\n2. Implement GET and PUT endpoints for profile management\n3. Ensure proper authentication middleware is applied\n\nExample implementation:\n```typescript\n// src/api/rest/routes/user.ts\nimport { FastifyInstance } from 'fastify';\nimport { UserService } from '../../../services/user';\nimport { UpdateProfileSchema } from '@fitnessai/types';\nimport { authenticate } from '../middleware/auth';\n\nexport async function userRoutes(fastify: FastifyInstance) {\n  const userService = new UserService();\n  \n  fastify.get('/profile', {\n    preHandler: [authenticate],\n    handler: async (request, reply) => {\n      const userId = request.user.id;\n      const profile = await userService.getUserProfile(userId);\n      if (!profile) {\n        return reply.status(404).send({\n          error: 'NotFound',\n          message: 'User profile not found'\n        });\n      }\n      return reply.send(profile);\n    }\n  });\n  \n  fastify.put('/profile', {\n    schema: {\n      body: UpdateProfileSchema\n    },\n    preHandler: [authenticate],\n    handler: async (request, reply) => {\n      const userId = request.user.id;\n      const updatedProfile = await userService.updateProfile(userId, request.body);\n      return reply.send(updatedProfile);\n    }\n  });\n}\n```",
+      "testStrategy": "1. Unit test each user profile endpoint\n2. Test authentication middleware integration\n3. Test successful profile retrieval and updates\n4. Test error cases (user not found, validation errors)\n5. Verify database interactions",
+      "priority": "medium",
+      "dependencies": [
+        1,
+        2,
+        3
+      ],
+      "status": "pending",
+      "subtasks": []
+    },
+    {
+      "id": 5,
+      "title": "Implement Training Plan REST Endpoints",
+      "description": "Create REST endpoints for training plan operations that mirror the existing gRPC training service.",
+      "details": "1. Create training plan routes in `/api/training`\n2. Implement GET endpoint for retrieving current training plan\n3. Implement POST endpoint for updating training plans\n4. Ensure proper authentication and validation\n\nExample implementation:\n```typescript\n// src/api/rest/routes/training.ts\nimport { FastifyInstance } from 'fastify';\nimport { TrainingService } from '../../../services/training';\nimport { UpdateTrainingPlanSchema } from '@fitnessai/types';\nimport { authenticate } from '../middleware/auth';\n\nexport async function trainingRoutes(fastify: FastifyInstance) {\n  const trainingService = new TrainingService();\n  \n  fastify.get('/plan', {\n    preHandler: [authenticate],\n    handler: async (request, reply) => {\n      const userId = request.user.id;\n      const plan = await trainingService.getCurrentPlan(userId);\n      if (!plan) {\n        return reply.status(404).send({\n          error: 'NotFound',\n          message: 'Training plan not found'\n        });\n      }\n      return reply.send(plan);\n    }\n  });\n  \n  fastify.post('/plan/update', {\n    schema: {\n      body: UpdateTrainingPlanSchema\n    },\n    preHandler: [authenticate],\n    handler: async (request, reply) => {\n      const userId = request.user.id;\n      const updatedPlan = await trainingService.updatePlan(userId, request.body);\n      return reply.send(updatedPlan);\n    }\n  });\n}\n```",
+      "testStrategy": "1. Unit test each training plan endpoint\n2. Test authentication integration\n3. Test successful plan retrieval and updates\n4. Test error cases (plan not found, validation errors)\n5. Verify that business logic remains intact",
+      "priority": "high",
+      "dependencies": [
+        1,
+        2,
+        3
+      ],
+      "status": "pending",
+      "subtasks": []
+    },
+    {
+      "id": 6,
+      "title": "Implement Training Feedback REST Endpoints",
+      "description": "Create REST endpoints for submitting training session feedback that mirror the existing gRPC feedback service.",
+      "details": "1. Create feedback submission endpoint in `/api/training/feedback`\n2. Ensure proper validation of feedback data\n3. Maintain connection to AI adaptation workflow\n\nExample implementation:\n```typescript\n// src/api/rest/routes/training.ts (continued)\nimport { FeedbackSchema } from '@fitnessai/types';\n\n// Inside trainingRoutes function\nfastify.post('/feedback', {\n  schema: {\n    body: FeedbackSchema\n  },\n  preHandler: [authenticate],\n  handler: async (request, reply) => {\n    const userId = request.user.id;\n    const { sessionId, feedback } = request.body;\n    \n    try {\n      const result = await trainingService.submitFeedback(userId, sessionId, feedback);\n      return reply.send(result);\n    } catch (error) {\n      if (error.message === 'Session not found') {\n        return reply.status(404).send({\n          error: 'NotFound',\n          message: 'Training session not found'\n        });\n      }\n      throw error;\n    }\n  }\n});\n```",
+      "testStrategy": "1. Unit test the feedback submission endpoint\n2. Test validation of different feedback types\n3. Test error cases (session not found, invalid feedback)\n4. Verify that feedback is properly stored\n5. Test integration with AI adaptation service",
+      "priority": "medium",
+      "dependencies": [
+        1,
+        2,
+        3,
+        5
+      ],
+      "status": "pending",
+      "subtasks": []
+    },
+    {
+      "id": 7,
+      "title": "Implement Training Suggestions REST Endpoint",
+      "description": "Create REST endpoint for generating training progression suggestions that integrates with the OpenAI API.",
+      "details": "1. Create suggestions endpoint in `/api/training/suggestions`\n2. Ensure proper integration with OpenAI API\n3. Maintain existing business logic for suggestion generation\n\nExample implementation:\n```typescript\n// src/api/rest/routes/training.ts (continued)\n\n// Inside trainingRoutes function\nfastify.get('/suggestions', {\n  preHandler: [authenticate],\n  handler: async (request, reply) => {\n    const userId = request.user.id;\n    \n    try {\n      const suggestions = await trainingService.generateSuggestions(userId);\n      return reply.send(suggestions);\n    } catch (error) {\n      if (error.message === 'No training data available') {\n        return reply.status(400).send({\n          error: 'InsufficientData',\n          message: 'Not enough training data to generate suggestions'\n        });\n      }\n      throw error;\n    }\n  }\n});\n```",
+      "testStrategy": "1. Unit test the suggestions endpoint\n2. Mock OpenAI API responses for testing\n3. Test error cases (insufficient data, API failures)\n4. Verify that suggestions are properly formatted\n5. Test integration with the training plan service",
+      "priority": "medium",
+      "dependencies": [
+        1,
+        2,
+        3,
+        5
+      ],
+      "status": "pending",
+      "subtasks": []
+    },
+    {
+      "id": 8,
+      "title": "Create REST API Client for Mobile App",
+      "description": "Develop a REST API client for the mobile app to replace the existing gRPC client.",
+      "details": "1. Create a new API client using Axios or fetch\n2. Implement methods for all REST endpoints\n3. Handle authentication token management\n4. Implement proper error handling\n\nExample implementation:\n```typescript\n// src/api/restClient.ts\nimport axios from 'axios';\nimport { API_BASE_URL } from '../config';\nimport { TrainingPlan, UserProfile, LoginResponse } from '@fitnessai/types';\n\nclass ApiClient {\n  private token: string | null = null;\n  private axiosInstance = axios.create({\n    baseURL: API_BASE_URL,\n    headers: {\n      'Content-Type': 'application/json'\n    }\n  });\n  \n  constructor() {\n    // Add request interceptor for auth token\n    this.axiosInstance.interceptors.request.use(config => {\n      if (this.token) {\n        config.headers.Authorization = `Bearer ${this.token}`;\n      }\n      return config;\n    });\n    \n    // Add response interceptor for error handling\n    this.axiosInstance.interceptors.response.use(\n      response => response.data,\n      error => {\n        if (error.response) {\n          // Format error based on response\n          return Promise.reject({\n            status: error.response.status,\n            ...error.response.data\n          });\n        }\n        return Promise.reject({\n          message: 'Network error',\n          error: 'NetworkError'\n        });\n      }\n    );\n  }\n  \n  setToken(token: string) {\n    this.token = token;\n  }\n  \n  clearToken() {\n    this.token = null;\n  }\n  \n  // Auth methods\n  async login(email: string, password: string): Promise<LoginResponse> {\n    const response = await this.axiosInstance.post('/api/auth/login', { email, password });\n    this.setToken(response.token);\n    return response;\n  }\n  \n  // Training methods\n  async getTrainingPlan(): Promise<TrainingPlan> {\n    return this.axiosInstance.get('/api/training/plan');\n  }\n  \n  async updateTrainingPlan(plan: Partial<TrainingPlan>): Promise<TrainingPlan> {\n    return this.axiosInstance.post('/api/training/plan/update', plan);\n  }\n  \n  // Additional methods for other endpoints...\n}\n\nexport const apiClient = new ApiClient();\n```",
+      "testStrategy": "1. Unit test the API client methods\n2. Mock API responses using axios-mock-adapter\n3. Test authentication token management\n4. Test error handling for different HTTP status codes\n5. Test retry logic for network failures",
+      "priority": "high",
+      "dependencies": [
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+      ],
+      "status": "pending",
+      "subtasks": []
+    },
+    {
+      "id": 9,
+      "title": "Update Mobile App Authentication Flow",
+      "description": "Modify the mobile app's authentication flow to use the new REST API client instead of gRPC.",
+      "details": "1. Update the `useAuth()` hook to use the REST API client\n2. Maintain the same interface for authentication state\n3. Update token storage and refresh mechanisms\n\nExample implementation:\n```typescript\n// src/hooks/useAuth.ts\nimport { useState, useEffect, useCallback } from 'react';\nimport { apiClient } from '../api/restClient';\nimport AsyncStorage from '@react-native-async-storage/async-storage';\n\nexport function useAuth() {\n  const [user, setUser] = useState(null);\n  const [loading, setLoading] = useState(true);\n  const [error, setError] = useState(null);\n  \n  // Load saved token on startup\n  useEffect(() => {\n    async function loadToken() {\n      try {\n        const token = await AsyncStorage.getItem('auth_token');\n        if (token) {\n          apiClient.setToken(token);\n          const userProfile = await apiClient.getUserProfile();\n          setUser(userProfile);\n        }\n      } catch (err) {\n        console.error('Failed to load auth state', err);\n      } finally {\n        setLoading(false);\n      }\n    }\n    \n    loadToken();\n  }, []);\n  \n  const login = useCallback(async (email, password) => {\n    setLoading(true);\n    setError(null);\n    \n    try {\n      const response = await apiClient.login(email, password);\n      await AsyncStorage.setItem('auth_token', response.token);\n      setUser(response.user);\n      return response.user;\n    } catch (err) {\n      setError(err.message || 'Login failed');\n      throw err;\n    } finally {\n      setLoading(false);\n    }\n  }, []);\n  \n  const logout = useCallback(async () => {\n    await AsyncStorage.removeItem('auth_token');\n    apiClient.clearToken();\n    setUser(null);\n  }, []);\n  \n  return { user, loading, error, login, logout };\n}\n```",
+      "testStrategy": "1. Unit test the authentication hook\n2. Test login, logout, and token persistence\n3. Test error handling for authentication failures\n4. Test automatic token loading on app start\n5. Integration test with the REST API client",
+      "priority": "high",
+      "dependencies": [
+        3,
+        8
+      ],
+      "status": "pending",
+      "subtasks": []
+    },
+    {
+      "id": 10,
+      "title": "Update Mobile App Training Flow",
+      "description": "Modify the mobile app's training-related features to use the new REST API client instead of gRPC.",
+      "details": "1. Update the `useTraining()` hook to use the REST API client\n2. Maintain the same interface for training state\n3. Update all training-related API calls\n\nExample implementation:\n```typescript\n// src/hooks/useTraining.ts\nimport { useState, useEffect, useCallback } from 'react';\nimport { apiClient } from '../api/restClient';\nimport { TrainingPlan } from '@fitnessai/types';\n\nexport function useTraining() {\n  const [plan, setPlan] = useState<TrainingPlan | null>(null);\n  const [loading, setLoading] = useState(true);\n  const [error, setError] = useState(null);\n  \n  const fetchPlan = useCallback(async () => {\n    setLoading(true);\n    setError(null);\n    \n    try {\n      const trainingPlan = await apiClient.getTrainingPlan();\n      setPlan(trainingPlan);\n      return trainingPlan;\n    } catch (err) {\n      setError(err.message || 'Failed to fetch training plan');\n      throw err;\n    } finally {\n      setLoading(false);\n    }\n  }, []);\n  \n  useEffect(() => {\n    fetchPlan().catch(err => console.error('Initial plan fetch failed', err));\n  }, [fetchPlan]);\n  \n  const updatePlan = useCallback(async (updates) => {\n    setLoading(true);\n    setError(null);\n    \n    try {\n      const updatedPlan = await apiClient.updateTrainingPlan(updates);\n      setPlan(updatedPlan);\n      return updatedPlan;\n    } catch (err) {\n      setError(err.message || 'Failed to update training plan');\n      throw err;\n    } finally {\n      setLoading(false);\n    }\n  }, []);\n  \n  const submitFeedback = useCallback(async (sessionId, feedback) => {\n    try {\n      return await apiClient.submitTrainingFeedback(sessionId, feedback);\n    } catch (err) {\n      setError(err.message || 'Failed to submit feedback');\n      throw err;\n    }\n  }, []);\n  \n  const getSuggestions = useCallback(async () => {\n    try {\n      return await apiClient.getTrainingSuggestions();\n    } catch (err) {\n      setError(err.message || 'Failed to get suggestions');\n      throw err;\n    }\n  }, []);\n  \n  return { \n    plan, \n    loading, \n    error, \n    fetchPlan, \n    updatePlan, \n    submitFeedback, \n    getSuggestions \n  };\n}\n```",
+      "testStrategy": "1. Unit test the training hook\n2. Test plan fetching, updating, and feedback submission\n3. Test error handling for API failures\n4. Test state management for loading and errors\n5. Integration test with the REST API client",
+      "priority": "high",
+      "dependencies": [
+        5,
+        6,
+        7,
+        8
+      ],
+      "status": "pending",
+      "subtasks": []
+    },
+    {
+      "id": 11,
+      "title": "Implement Error Handling in Mobile App",
+      "description": "Update the mobile app's error handling to work with HTTP-specific errors from the REST API.",
+      "details": "1. Create error handling utilities for HTTP status codes\n2. Update error displays in the UI\n3. Implement retry logic for network failures\n\nExample implementation:\n```typescript\n// src/utils/errorHandling.ts\nimport { Alert } from 'react-native';\n\nexport interface ApiError {\n  error: string;\n  message: string;\n  status?: number;\n}\n\nexport function handleApiError(error: ApiError, context: string = 'operation') {\n  console.error(`API Error during ${context}:`, error);\n  \n  // Handle specific error types\n  switch (error.status) {\n    case 401:\n      // Unauthorized - trigger logout or re-authentication\n      Alert.alert('Session Expired', 'Please log in again to continue.');\n      // Could trigger navigation to login or auth refresh\n      break;\n      \n    case 404:\n      Alert.alert('Not Found', `The requested ${context} could not be found.`);\n      break;\n      \n    case 400:\n      Alert.alert('Invalid Request', error.message || `There was a problem with your ${context}.`);\n      break;\n      \n    case 500:\n      Alert.alert('Server Error', 'Our servers are experiencing issues. Please try again later.');\n      break;\n      \n    default:\n      if (!navigator.onLine) {\n        Alert.alert('Network Error', 'Please check your internet connection and try again.');\n      } else {\n        Alert.alert('Error', error.message || `An error occurred during ${context}.`);\n      }\n  }\n  \n  return error;\n}\n\n// Usage in components\ntry {\n  await apiClient.updateTrainingPlan(updates);\n} catch (error) {\n  handleApiError(error, 'updating training plan');\n}\n```",
+      "testStrategy": "1. Unit test error handling for different status codes\n2. Test integration with API client error responses\n3. Test UI alerts and error messages\n4. Test offline handling and retry logic\n5. Verify error logging functionality",
+      "priority": "medium",
+      "dependencies": [
+        8,
+        9,
+        10
+      ],
+      "status": "pending",
+      "subtasks": []
+    },
+    {
+      "id": 12,
+      "title": "Implement Integration Tests for REST API",
+      "description": "Create comprehensive integration tests for the new REST API endpoints to ensure they match gRPC functionality.",
+      "details": "1. Set up a test environment for the REST API\n2. Create test suites for each endpoint group\n3. Test authentication, error handling, and success cases\n4. Compare results with existing gRPC functionality\n\nExample implementation:\n```typescript\n// tests/integration/rest-api.test.ts\nimport { build } from '../../src/app';\nimport { test, beforeAll, afterAll, expect, describe } from 'vitest';\nimport { createTestUser, generateAuthToken } from '../helpers/auth';\n\ndescribe('REST API Integration Tests', () => {\n  let app;\n  let testUser;\n  let authToken;\n  \n  beforeAll(async () => {\n    app = build();\n    await app.ready();\n    \n    // Create test user and get auth token\n    testUser = await createTestUser();\n    authToken = generateAuthToken(testUser);\n  });\n  \n  afterAll(async () => {\n    await app.close();\n  });\n  \n  describe('Authentication Endpoints', () => {\n    test('POST /api/auth/login - should return token for valid credentials', async () => {\n      const response = await app.inject({\n        method: 'POST',\n        url: '/api/auth/login',\n        payload: {\n          email: testUser.email,\n          password: 'password123' // Test password\n        }\n      });\n      \n      expect(response.statusCode).toBe(200);\n      const body = JSON.parse(response.body);\n      expect(body).toHaveProperty('token');\n      expect(body).toHaveProperty('user');\n      expect(body.user.id).toBe(testUser.id);\n    });\n    \n    // More auth tests...\n  });\n  \n  describe('Training Plan Endpoints', () => {\n    test('GET /api/training/plan - should return user training plan', async () => {\n      const response = await app.inject({\n        method: 'GET',\n        url: '/api/training/plan',\n        headers: {\n          Authorization: `Bearer ${authToken}`\n        }\n      });\n      \n      expect(response.statusCode).toBe(200);\n      const body = JSON.parse(response.body);\n      expect(body).toHaveProperty('id');\n      expect(body).toHaveProperty('weeks');\n      // Verify plan structure matches expected format\n    });\n    \n    // More training endpoints tests...\n  });\n  \n  // Additional test suites for other endpoint groups\n});\n```",
+      "testStrategy": "1. Set up isolated test database for integration tests\n2. Create test fixtures for users, training plans, etc.\n3. Test each endpoint for success and failure cases\n4. Verify response formats match expected schemas\n5. Test authentication and authorization rules",
+      "priority": "medium",
+      "dependencies": [
+        3,
+        4,
+        5,
+        6,
+        7
+      ],
+      "status": "pending",
+      "subtasks": []
+    },
+    {
+      "id": 13,
+      "title": "Implement Parallel Running of gRPC and REST",
+      "description": "Configure the server to run both gRPC and REST APIs in parallel during the transition period.",
+      "details": "1. Update server startup to initialize both gRPC and REST\n2. Ensure both APIs access the same service layer\n3. Implement logging to track usage of each API\n\nExample implementation:\n```typescript\n// src/server.ts\nimport fastify from 'fastify';\nimport { setupGrpcServer } from './grpc';\nimport { setupRestApi } from './api/rest';\nimport { logger } from './utils/logger';\n\nasync function startServer() {\n  const app = fastify({\n    logger: true\n  });\n  \n  // Set up REST API\n  setupRestApi(app);\n  \n  // Set up gRPC server (existing code)\n  const grpcServer = setupGrpcServer();\n  \n  // Start both servers\n  try {\n    const port = process.env.PORT || 3000;\n    await app.listen({ port });\n    logger.info(`REST API listening on port ${port}`);\n    \n    // gRPC server is already running from setupGrpcServer\n    \n    // Add shutdown handler\n    const shutdown = async () => {\n      logger.info('Shutting down servers...');\n      await app.close();\n      grpcServer.forceShutdown();\n      process.exit(0);\n    };\n    \n    process.on('SIGTERM', shutdown);\n    process.on('SIGINT', shutdown);\n  } catch (err) {\n    logger.error('Error starting servers:', err);\n    process.exit(1);\n  }\n}\n\nstartServer();\n```",
+      "testStrategy": "1. Test server startup with both APIs enabled\n2. Verify that both APIs can be accessed simultaneously\n3. Test graceful shutdown of both servers\n4. Load test to ensure performance is maintained\n5. Verify logging captures API usage correctly",
+      "priority": "medium",
+      "dependencies": [
+        1,
+        3,
+        4,
+        5,
+        6,
+        7
+      ],
+      "status": "pending",
+      "subtasks": []
+    },
+    {
+      "id": 14,
+      "title": "Implement Feature Flag for API Selection in Mobile App",
+      "description": "Add a feature flag system to the mobile app to control which API (gRPC or REST) is used.",
+      "details": "1. Create a feature flag system for API selection\n2. Implement a factory pattern for API client creation\n3. Allow remote configuration of the active API\n\nExample implementation:\n```typescript\n// src/config/featureFlags.ts\nimport AsyncStorage from '@react-native-async-storage/async-storage';\n\nexport enum ApiType {\n  GRPC = 'grpc',\n  REST = 'rest'\n}\n\nclass FeatureFlags {\n  private flags: Record<string, any> = {\n    apiType: ApiType.GRPC // Default to gRPC initially\n  };\n  \n  async initialize() {\n    try {\n      // Load saved flags\n      const savedFlags = await AsyncStorage.getItem('feature_flags');\n      if (savedFlags) {\n        this.flags = { ...this.flags, ...JSON.parse(savedFlags) };\n      }\n      \n      // Could also fetch remote flags here\n      // const remoteFlags = await fetchRemoteFlags();\n      // this.flags = { ...this.flags, ...remoteFlags };\n      \n      // Save merged flags\n      await this.saveFlags();\n    } catch (error) {\n      console.error('Failed to initialize feature flags', error);\n    }\n  }\n  \n  async saveFlags() {\n    await AsyncStorage.setItem('feature_flags', JSON.stringify(this.flags));\n  }\n  \n  getApiType(): ApiType {\n    return this.flags.apiType;\n  }\n  \n  async setApiType(type: ApiType) {\n    this.flags.apiType = type;\n    await this.saveFlags();\n  }\n}\n\nexport const featureFlags = new FeatureFlags();\n\n// src/api/clientFactory.ts\nimport { featureFlags, ApiType } from '../config/featureFlags';\nimport { grpcClient } from './grpcClient';\nimport { apiClient } from './restClient';\n\nexport function getApiClient() {\n  const apiType = featureFlags.getApiType();\n  \n  switch (apiType) {\n    case ApiType.REST:\n      return apiClient;\n    case ApiType.GRPC:\n    default:\n      return grpcClient;\n  }\n}\n\n// Usage in hooks\nimport { getApiClient } from '../api/clientFactory';\n\nexport function useAuth() {\n  const client = getApiClient();\n  // Use client for API calls\n}\n```",
+      "testStrategy": "1. Test feature flag initialization and persistence\n2. Test API client factory with different flag values\n3. Test runtime switching between API types\n4. Verify that the correct client is used based on the flag\n5. Test remote configuration of flags if implemented",
+      "priority": "medium",
+      "dependencies": [
+        8,
+        9,
+        10,
+        11
+      ],
+      "status": "pending",
+      "subtasks": []
+    },
+    {
+      "id": 15,
+      "title": "Implement Cleanup and gRPC Deprecation",
+      "description": "After successful migration, remove gRPC code and dependencies from the codebase.",
+      "details": "1. Remove gRPC client from mobile app\n2. Remove proto files and related build steps\n3. Remove gRPC server implementation\n4. Update documentation and README files\n5. Clean up dependencies in package.json\n\nSteps to execute:\n```bash\n# 1. Remove gRPC client from mobile app\nrm -rf src/api/grpcClient.ts\nrm -rf src/api/generated/*\n\n# 2. Remove proto files\nrm -rf proto/*\n\n# 3. Update package.json to remove gRPC dependencies\n# Remove these packages:\n# - grpc\n# - @grpc/grpc-js\n# - @grpc/proto-loader\n# - ts-proto\n# - protobufjs\n\n# 4. Remove gRPC server implementation\nrm -rf src/grpc/*\n\n# 5. Update build scripts in package.json\n# Remove proto compilation steps\n```\n\nUpdate server.ts to remove gRPC initialization:\n```typescript\n// src/server.ts (updated)\nimport fastify from 'fastify';\nimport { setupRestApi } from './api/rest';\nimport { logger } from './utils/logger';\n\nasync function startServer() {\n  const app = fastify({\n    logger: true\n  });\n  \n  // Set up REST API only\n  setupRestApi(app);\n  \n  try {\n    const port = process.env.PORT || 3000;\n    await app.listen({ port });\n    logger.info(`REST API listening on port ${port}`);\n    \n    // Add shutdown handler\n    const shutdown = async () => {\n      logger.info('Shutting down server...');\n      await app.close();\n      process.exit(0);\n    };\n    \n    process.on('SIGTERM', shutdown);\n    process.on('SIGINT', shutdown);\n  } catch (err) {\n    logger.error('Error starting server:', err);\n    process.exit(1);\n  }\n}\n\nstartServer();\n```",
+      "testStrategy": "1. Verify that all gRPC code has been removed\n2. Test that the application builds without gRPC dependencies\n3. Run the full test suite to ensure functionality is maintained\n4. Verify that documentation is updated\n5. Perform a final end-to-end test of the application",
+      "priority": "low",
+      "dependencies": [
+        9,
+        10,
+        11,
+        12,
+        13,
+        14
+      ],
+      "status": "pending",
+      "subtasks": []
+    }
+  ]
+}

@@ -1,0 +1,95 @@
+# Task ID: 10
+# Title: Update Mobile App Training Flow
+# Status: pending
+# Dependencies: 5, 6, 7, 8
+# Priority: high
+# Description: Modify the mobile app's training-related features to use the new REST API client instead of gRPC.
+# Details:
+1. Update the `useTraining()` hook to use the REST API client
+2. Maintain the same interface for training state
+3. Update all training-related API calls
+
+Example implementation:
+```typescript
+// src/hooks/useTraining.ts
+import { useState, useEffect, useCallback } from 'react';
+import { apiClient } from '../api/restClient';
+import { TrainingPlan } from '@fitnessai/types';
+
+export function useTraining() {
+  const [plan, setPlan] = useState<TrainingPlan | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  
+  const fetchPlan = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    
+    try {
+      const trainingPlan = await apiClient.getTrainingPlan();
+      setPlan(trainingPlan);
+      return trainingPlan;
+    } catch (err) {
+      setError(err.message || 'Failed to fetch training plan');
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+  
+  useEffect(() => {
+    fetchPlan().catch(err => console.error('Initial plan fetch failed', err));
+  }, [fetchPlan]);
+  
+  const updatePlan = useCallback(async (updates) => {
+    setLoading(true);
+    setError(null);
+    
+    try {
+      const updatedPlan = await apiClient.updateTrainingPlan(updates);
+      setPlan(updatedPlan);
+      return updatedPlan;
+    } catch (err) {
+      setError(err.message || 'Failed to update training plan');
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+  
+  const submitFeedback = useCallback(async (sessionId, feedback) => {
+    try {
+      return await apiClient.submitTrainingFeedback(sessionId, feedback);
+    } catch (err) {
+      setError(err.message || 'Failed to submit feedback');
+      throw err;
+    }
+  }, []);
+  
+  const getSuggestions = useCallback(async () => {
+    try {
+      return await apiClient.getTrainingSuggestions();
+    } catch (err) {
+      setError(err.message || 'Failed to get suggestions');
+      throw err;
+    }
+  }, []);
+  
+  return { 
+    plan, 
+    loading, 
+    error, 
+    fetchPlan, 
+    updatePlan, 
+    submitFeedback, 
+    getSuggestions 
+  };
+}
+```
+
+# Test Strategy:
+1. Unit test the training hook
+2. Test plan fetching, updating, and feedback submission
+3. Test error handling for API failures
+4. Test state management for loading and errors
+5. Integration test with the REST API client

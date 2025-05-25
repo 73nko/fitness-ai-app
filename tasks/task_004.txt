@@ -1,0 +1,57 @@
+# Task ID: 4
+# Title: Implement User Profile REST Endpoints
+# Status: pending
+# Dependencies: 1, 2, 3
+# Priority: medium
+# Description: Create REST endpoints for user profile operations that mirror the existing gRPC user service.
+# Details:
+1. Create user profile routes in `/api/user`
+2. Implement GET and PUT endpoints for profile management
+3. Ensure proper authentication middleware is applied
+
+Example implementation:
+```typescript
+// src/api/rest/routes/user.ts
+import { FastifyInstance } from 'fastify';
+import { UserService } from '../../../services/user';
+import { UpdateProfileSchema } from '@fitnessai/types';
+import { authenticate } from '../middleware/auth';
+
+export async function userRoutes(fastify: FastifyInstance) {
+  const userService = new UserService();
+  
+  fastify.get('/profile', {
+    preHandler: [authenticate],
+    handler: async (request, reply) => {
+      const userId = request.user.id;
+      const profile = await userService.getUserProfile(userId);
+      if (!profile) {
+        return reply.status(404).send({
+          error: 'NotFound',
+          message: 'User profile not found'
+        });
+      }
+      return reply.send(profile);
+    }
+  });
+  
+  fastify.put('/profile', {
+    schema: {
+      body: UpdateProfileSchema
+    },
+    preHandler: [authenticate],
+    handler: async (request, reply) => {
+      const userId = request.user.id;
+      const updatedProfile = await userService.updateProfile(userId, request.body);
+      return reply.send(updatedProfile);
+    }
+  });
+}
+```
+
+# Test Strategy:
+1. Unit test each user profile endpoint
+2. Test authentication middleware integration
+3. Test successful profile retrieval and updates
+4. Test error cases (user not found, validation errors)
+5. Verify database interactions

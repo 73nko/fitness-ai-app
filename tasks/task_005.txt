@@ -1,0 +1,58 @@
+# Task ID: 5
+# Title: Implement Training Plan REST Endpoints
+# Status: pending
+# Dependencies: 1, 2, 3
+# Priority: high
+# Description: Create REST endpoints for training plan operations that mirror the existing gRPC training service.
+# Details:
+1. Create training plan routes in `/api/training`
+2. Implement GET endpoint for retrieving current training plan
+3. Implement POST endpoint for updating training plans
+4. Ensure proper authentication and validation
+
+Example implementation:
+```typescript
+// src/api/rest/routes/training.ts
+import { FastifyInstance } from 'fastify';
+import { TrainingService } from '../../../services/training';
+import { UpdateTrainingPlanSchema } from '@fitnessai/types';
+import { authenticate } from '../middleware/auth';
+
+export async function trainingRoutes(fastify: FastifyInstance) {
+  const trainingService = new TrainingService();
+  
+  fastify.get('/plan', {
+    preHandler: [authenticate],
+    handler: async (request, reply) => {
+      const userId = request.user.id;
+      const plan = await trainingService.getCurrentPlan(userId);
+      if (!plan) {
+        return reply.status(404).send({
+          error: 'NotFound',
+          message: 'Training plan not found'
+        });
+      }
+      return reply.send(plan);
+    }
+  });
+  
+  fastify.post('/plan/update', {
+    schema: {
+      body: UpdateTrainingPlanSchema
+    },
+    preHandler: [authenticate],
+    handler: async (request, reply) => {
+      const userId = request.user.id;
+      const updatedPlan = await trainingService.updatePlan(userId, request.body);
+      return reply.send(updatedPlan);
+    }
+  });
+}
+```
+
+# Test Strategy:
+1. Unit test each training plan endpoint
+2. Test authentication integration
+3. Test successful plan retrieval and updates
+4. Test error cases (plan not found, validation errors)
+5. Verify that business logic remains intact

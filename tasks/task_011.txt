@@ -1,0 +1,70 @@
+# Task ID: 11
+# Title: Implement Error Handling in Mobile App
+# Status: pending
+# Dependencies: 8, 9, 10
+# Priority: medium
+# Description: Update the mobile app's error handling to work with HTTP-specific errors from the REST API.
+# Details:
+1. Create error handling utilities for HTTP status codes
+2. Update error displays in the UI
+3. Implement retry logic for network failures
+
+Example implementation:
+```typescript
+// src/utils/errorHandling.ts
+import { Alert } from 'react-native';
+
+export interface ApiError {
+  error: string;
+  message: string;
+  status?: number;
+}
+
+export function handleApiError(error: ApiError, context: string = 'operation') {
+  console.error(`API Error during ${context}:`, error);
+  
+  // Handle specific error types
+  switch (error.status) {
+    case 401:
+      // Unauthorized - trigger logout or re-authentication
+      Alert.alert('Session Expired', 'Please log in again to continue.');
+      // Could trigger navigation to login or auth refresh
+      break;
+      
+    case 404:
+      Alert.alert('Not Found', `The requested ${context} could not be found.`);
+      break;
+      
+    case 400:
+      Alert.alert('Invalid Request', error.message || `There was a problem with your ${context}.`);
+      break;
+      
+    case 500:
+      Alert.alert('Server Error', 'Our servers are experiencing issues. Please try again later.');
+      break;
+      
+    default:
+      if (!navigator.onLine) {
+        Alert.alert('Network Error', 'Please check your internet connection and try again.');
+      } else {
+        Alert.alert('Error', error.message || `An error occurred during ${context}.`);
+      }
+  }
+  
+  return error;
+}
+
+// Usage in components
+try {
+  await apiClient.updateTrainingPlan(updates);
+} catch (error) {
+  handleApiError(error, 'updating training plan');
+}
+```
+
+# Test Strategy:
+1. Unit test error handling for different status codes
+2. Test integration with API client error responses
+3. Test UI alerts and error messages
+4. Test offline handling and retry logic
+5. Verify error logging functionality
