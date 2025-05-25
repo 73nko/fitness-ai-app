@@ -292,8 +292,8 @@
             1,
             2
           ],
-          "details": "In userRoutes function, add fastify.put('/profile', ...) route. Use authenticate middleware and UpdateProfileSchema for request body validation. Implement handler to call userService.updateProfile(). Return updated profile data.",
-          "status": "pending",
+          "details": "In userRoutes function, add fastify.put('/profile', ...) route. Use authenticate middleware and UpdateProfileSchema for request body validation. Implement handler to call userService.updateProfile(). Return updated profile data.\n<info added on 2025-05-25T11:27:25.926Z>\nImplemented PUT /profile endpoint in server/src/api/rest/routes/user.ts. Route uses authMiddleware for authentication and UpdateProfileRequestSchema for request body validation. Handler calls userService.updateProfile() and returns updated profile data on success. Added 404 error response if user/profile is not found or update fails. Implemented basic error handling. Resolved type incompatibility issues between request body and schema validation.\n</info added on 2025-05-25T11:27:25.926Z>",
+          "status": "done",
           "testStrategy": "Integration test PUT /profile with valid and invalid data, authenticated and unauthenticated requests"
         },
         {

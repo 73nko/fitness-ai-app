@@ -81,11 +81,14 @@ In userRoutes function, add fastify.get('/profile', ...) route. Use authenticate
 Implemented GET /profile endpoint in server/src/api/rest/routes/user.ts. The route uses authMiddleware for authentication and calls userService.getUserProfile() to fetch user data. Returns 404 if the profile is not found, and 200 with profile data if successful. Basic error handling has been added to manage potential exceptions during the request processing.
 </info added on 2025-05-25T11:26:40.369Z>
 
-## 4. Implement PUT /profile endpoint [pending]
+## 4. Implement PUT /profile endpoint [done]
 ### Dependencies: 4.1, 4.2
 ### Description: Create a PUT endpoint for updating user profiles
 ### Details:
 In userRoutes function, add fastify.put('/profile', ...) route. Use authenticate middleware and UpdateProfileSchema for request body validation. Implement handler to call userService.updateProfile(). Return updated profile data.
+<info added on 2025-05-25T11:27:25.926Z>
+Implemented PUT /profile endpoint in server/src/api/rest/routes/user.ts. Route uses authMiddleware for authentication and UpdateProfileRequestSchema for request body validation. Handler calls userService.updateProfile() and returns updated profile data on success. Added 404 error response if user/profile is not found or update fails. Implemented basic error handling. Resolved type incompatibility issues between request body and schema validation.
+</info added on 2025-05-25T11:27:25.926Z>
 
 ## 5. Apply authentication middleware [pending]
 ### Dependencies: 4.3, 4.4
