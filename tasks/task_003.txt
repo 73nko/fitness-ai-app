@@ -80,11 +80,14 @@ The login endpoint in `server/src/api/rest/routes/auth.ts` has been updated with
 Next steps: Ensure the `AuthService` implementation in `server/src/services/auth.ts` is complete and functional. Verify that the login endpoint works as expected, returning a JWT token on successful login and handling errors appropriately.
 </info added on 2025-05-25T11:14:00.548Z>
 
-## 3. Implement registration endpoint [pending]
+## 3. Implement registration endpoint [done]
 ### Dependencies: 3.1
 ### Description: Create a POST endpoint for user registration that mirrors the gRPC implementation
 ### Details:
 Inside the `authRoutes` function, implement a POST route for '/register'. Use the RegisterSchema for request body validation. Call the AuthService's register method with user details. Return a success message or user object on successful registration. Implement proper error handling for existing users or invalid data.
+<info added on 2025-05-25T11:15:01.779Z>
+The registration endpoint has been implemented in `server/src/api/rest/routes/auth.ts`. It uses `RegisterRequestSchema` for request body validation and calls the placeholder `authService.register()` method. On successful registration, it returns a 201 status. Basic error handling is in place, with 409 status for conflicts (e.g., existing users) and 500 for server errors. The shared types are imported from '@shared-types/user'. Note: If linter errors persist for this import, the project configuration for resolving this local package should be reviewed.
+</info added on 2025-05-25T11:15:01.779Z>
 
 ## 4. Implement token refresh endpoint [pending]
 ### Dependencies: 3.1

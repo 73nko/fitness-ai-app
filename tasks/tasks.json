@@ -210,8 +210,8 @@
           "dependencies": [
             1
           ],
-          "details": "Inside the `authRoutes` function, implement a POST route for '/register'. Use the RegisterSchema for request body validation. Call the AuthService's register method with user details. Return a success message or user object on successful registration. Implement proper error handling for existing users or invalid data.",
-          "status": "pending",
+          "details": "Inside the `authRoutes` function, implement a POST route for '/register'. Use the RegisterSchema for request body validation. Call the AuthService's register method with user details. Return a success message or user object on successful registration. Implement proper error handling for existing users or invalid data.\n<info added on 2025-05-25T11:15:01.779Z>\nThe registration endpoint has been implemented in `server/src/api/rest/routes/auth.ts`. It uses `RegisterRequestSchema` for request body validation and calls the placeholder `authService.register()` method. On successful registration, it returns a 201 status. Basic error handling is in place, with 409 status for conflicts (e.g., existing users) and 500 for server errors. The shared types are imported from '@shared-types/user'. Note: If linter errors persist for this import, the project configuration for resolving this local package should be reviewed.\n</info added on 2025-05-25T11:15:01.779Z>",
+          "status": "done",
           "testStrategy": "Write integration tests to verify successful registration and proper error responses"
         },
         {

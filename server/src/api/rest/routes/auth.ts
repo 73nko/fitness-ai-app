@@ -1,6 +1,12 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { AuthService } from '../../../services/auth'; // Uncommented and path verified
-import { LoginRequestSchema, LoginRequest } from '@shared-types/user'; // Using user-provided path
+import {
+  LoginRequestSchema,
+  LoginRequest,
+  RegisterRequestSchema,
+  RegisterRequest,
+  UserResponse,
+} from '@shared-types/user'; // Added Register types
 
 export async function authRoutes(fastify: FastifyInstance): Promise<void> {
   const authService = new AuthService(); // Uncommented
@@ -38,11 +44,39 @@ export async function authRoutes(fastify: FastifyInstance): Promise<void> {
     }
   );
 
-  // Registration route placeholder
-  fastify.post('/register', async (request, reply) => {
-    // Implementation to be added in a later subtask
-    return reply.send({ message: 'Register endpoint placeholder' });
-  });
+  // Registration route
+  fastify.post(
+    '/register',
+    {
+      schema: {
+        body: RegisterRequestSchema,
+        // TODO: Define response schema (e.g., UserResponseSchema or a specific registration success schema)
+      },
+    },
+    async (
+      request: FastifyRequest<{ Body: RegisterRequest }>,
+      reply: FastifyReply
+    ) => {
+      try {
+        const result: UserResponse = await authService.register(request.body);
+        return reply.status(201).send(result); // 201 Created for successful registration
+      } catch (error: any) {
+        // Example: Handle specific error for user already existing
+        if (error.message === 'User already exists') {
+          // This error message depends on AuthService implementation
+          return reply.status(409).send({
+            error: 'ConflictError',
+            message: 'A user with this email already exists',
+          });
+        }
+        request.log.error(error, 'Registration endpoint error');
+        return reply.status(500).send({
+          error: 'InternalServerError',
+          message: 'An unexpected error occurred during registration',
+        });
+      }
+    }
+  );
 
   // Token refresh route placeholder
   fastify.post('/refresh-token', async (request, reply) => {
