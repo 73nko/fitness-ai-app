@@ -40,7 +40,8 @@
     "pino": "^8.17.2",
     "pino-pretty": "^10.3.1",
     "redis": "^4.6.13",
-    "uuid": "^11.1.0"
+    "uuid": "^11.1.0",
+    "zod": "^3.25.28"
   },
   "devDependencies": {
     "@types/bcrypt": "^5.0.2",

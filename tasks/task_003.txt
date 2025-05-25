@@ -89,11 +89,14 @@ Inside the `authRoutes` function, implement a POST route for '/register'. Use th
 The registration endpoint has been implemented in `server/src/api/rest/routes/auth.ts`. It uses `RegisterRequestSchema` for request body validation and calls the placeholder `authService.register()` method. On successful registration, it returns a 201 status. Basic error handling is in place, with 409 status for conflicts (e.g., existing users) and 500 for server errors. The shared types are imported from '@shared-types/user'. Note: If linter errors persist for this import, the project configuration for resolving this local package should be reviewed.
 </info added on 2025-05-25T11:15:01.779Z>
 
-## 4. Implement token refresh endpoint [pending]
+## 4. Implement token refresh endpoint [done]
 ### Dependencies: 3.1
 ### Description: Create a POST endpoint for refreshing JWT tokens
 ### Details:
 Inside the `authRoutes` function, implement a POST route for '/refresh-token'. Validate the incoming refresh token. Call the AuthService's refreshToken method. Return a new access token on successful refresh. Implement proper error handling for invalid or expired refresh tokens.
+<info added on 2025-05-25T11:16:03.122Z>
+The token refresh endpoint has been implemented in `server/src/api/rest/routes/auth.ts`. It uses an inline Zod schema (`RefreshTokenRequestSchema`) for request body validation and calls `authService.refreshToken()`. The implementation includes success (200) and error handling (401 for invalid token, 500 for server error). The Zod import (`import { z } from 'zod';`) was added to the file. If linter errors for 'zod' module not found persist, ensure Zod is installed and resolvable in the server project environment.
+</info added on 2025-05-25T11:16:03.122Z>
 
 ## 5. Implement authentication middleware [pending]
 ### Dependencies: 3.2, 3.3, 3.4

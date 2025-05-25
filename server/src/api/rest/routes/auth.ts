@@ -7,6 +7,13 @@ import {
   RegisterRequest,
   UserResponse,
 } from '@shared-types/user'; // Added Register types
+import { z } from 'zod'; // Import Zod
+
+// Define schema for refresh token request body inline
+const RefreshTokenRequestSchema = z.object({
+  refreshToken: z.string(),
+});
+type RefreshTokenRequest = z.infer<typeof RefreshTokenRequestSchema>;
 
 export async function authRoutes(fastify: FastifyInstance): Promise<void> {
   const authService = new AuthService(); // Uncommented
@@ -78,9 +85,37 @@ export async function authRoutes(fastify: FastifyInstance): Promise<void> {
     }
   );
 
-  // Token refresh route placeholder
-  fastify.post('/refresh-token', async (request, reply) => {
-    // Implementation to be added in a later subtask
-    return reply.send({ message: 'Token refresh endpoint placeholder' });
-  });
+  // Token refresh route
+  fastify.post(
+    '/refresh-token',
+    {
+      schema: {
+        body: RefreshTokenRequestSchema,
+        // TODO: Define response schema (e.g., { accessToken: string })
+      },
+    },
+    async (
+      request: FastifyRequest<{ Body: RefreshTokenRequest }>,
+      reply: FastifyReply
+    ) => {
+      try {
+        const { refreshToken } = request.body;
+        const result = await authService.refreshToken(refreshToken);
+        return reply.status(200).send(result); // Sends { accessToken: string }
+      } catch (error: any) {
+        if (error.message === 'Invalid refresh token') {
+          // This error message depends on AuthService implementation
+          return reply.status(401).send({
+            error: 'UnauthorizedError',
+            message: 'Invalid or expired refresh token',
+          });
+        }
+        request.log.error(error, 'Token refresh endpoint error');
+        return reply.status(500).send({
+          error: 'InternalServerError',
+          message: 'An unexpected error occurred during token refresh',
+        });
+      }
+    }
+  );
 }

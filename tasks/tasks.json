@@ -221,8 +221,8 @@
           "dependencies": [
             1
           ],
-          "details": "Inside the `authRoutes` function, implement a POST route for '/refresh-token'. Validate the incoming refresh token. Call the AuthService's refreshToken method. Return a new access token on successful refresh. Implement proper error handling for invalid or expired refresh tokens.",
-          "status": "pending",
+          "details": "Inside the `authRoutes` function, implement a POST route for '/refresh-token'. Validate the incoming refresh token. Call the AuthService's refreshToken method. Return a new access token on successful refresh. Implement proper error handling for invalid or expired refresh tokens.\n<info added on 2025-05-25T11:16:03.122Z>\nThe token refresh endpoint has been implemented in `server/src/api/rest/routes/auth.ts`. It uses an inline Zod schema (`RefreshTokenRequestSchema`) for request body validation and calls `authService.refreshToken()`. The implementation includes success (200) and error handling (401 for invalid token, 500 for server error). The Zod import (`import { z } from 'zod';`) was added to the file. If linter errors for 'zod' module not found persist, ensure Zod is installed and resolvable in the server project environment.\n</info added on 2025-05-25T11:16:03.122Z>",
+          "status": "done",
           "testStrategy": "Write integration tests to verify successful token refresh and proper error responses"
         },
         {
