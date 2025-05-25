@@ -50,7 +50,7 @@ export function setupRestApi(app) {
 4. Ensure all route prefixes are registered correctly
 
 # Subtasks:
-## 1. Create REST API Directory Structure [pending]
+## 1. Create REST API Directory Structure [done]
 ### Dependencies: None
 ### Description: Set up a new directory structure for REST API endpoints within the Fastify server project.
 ### Details:
