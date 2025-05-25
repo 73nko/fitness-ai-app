@@ -1,5 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import cors from '@fastify/cors';
+import { customRequestLogger } from './middleware/requestLogger';
 
 // Placeholder for future route imports
 // import { trainingRoutes } from './routes/training';
@@ -13,24 +14,13 @@ export function setupRestApi(app: FastifyInstance) {
     credentials: true,
   });
 
+  // Register custom request logger
+  customRequestLogger(app);
+
   // Register routes (placeholders for now)
   // app.register(trainingRoutes, { prefix: '/api/training' });
   // app.register(userRoutes, { prefix: '/api/user' });
   // app.register(authRoutes, { prefix: '/api/auth' });
-
-  // Basic request logging (can be expanded in a later subtask)
-  app.addHook('onRequest', (request, reply, done) => {
-    request.log.info({ req: request.raw }, 'incoming request');
-    done();
-  });
-
-  app.addHook('onResponse', (request, reply, done) => {
-    request.log.info(
-      { res: reply.raw, rtt: reply.getResponseTime() },
-      'request completed'
-    );
-    done();
-  });
 
   // Error handler
   app.setErrorHandler((error, request, reply) => {
@@ -43,6 +33,6 @@ export function setupRestApi(app: FastifyInstance) {
   });
 
   app.log.info(
-    'REST API setup complete with CORS, basic logging, and error handling.'
+    'REST API setup complete with CORS, custom logging, and error handling.'
   );
 }

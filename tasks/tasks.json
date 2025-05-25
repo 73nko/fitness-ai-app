@@ -49,7 +49,7 @@
             2
           ],
           "details": "Develop a custom middleware function that logs relevant information for each incoming request, such as method, URL, headers, and body (if applicable). Integrate this middleware into the Fastify server configuration.",
-          "status": "pending",
+          "status": "done",
           "testStrategy": "Use mock objects to test if the logging middleware correctly captures and formats request information. Verify log output in integration tests."
         },
         {

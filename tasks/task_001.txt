@@ -68,7 +68,7 @@ Create an 'index.ts' file in the 'src/api/rest' directory. Implement a 'setupRes
 ### Details:
 Use the '@fastify/cors' plugin to configure CORS settings. Set up options to allow specific origins or use a wildcard. Ensure credentials are properly handled if required.
 
-## 4. Implement Request Logging Middleware [pending]
+## 4. Implement Request Logging Middleware [done]
 ### Dependencies: 1.2
 ### Description: Create and integrate middleware for logging incoming REST API requests.
 ### Details:
