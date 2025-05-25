@@ -27,7 +27,7 @@
             1
           ],
           "details": "Create an 'index.ts' file in the 'src/api/rest' directory. Implement a 'setupRestApi' function that initializes Fastify plugins, registers route handlers, and sets up basic configurations like CORS and error handling.",
-          "status": "pending",
+          "status": "done",
           "testStrategy": "Write integration tests to ensure the base router is properly configured and can handle basic requests."
         },
         {
@@ -38,7 +38,7 @@
             2
           ],
           "details": "Use the '@fastify/cors' plugin to configure CORS settings. Set up options to allow specific origins or use a wildcard. Ensure credentials are properly handled if required.",
-          "status": "pending",
+          "status": "done",
           "testStrategy": "Create unit tests to verify CORS headers are properly set on responses. Include tests for both allowed and disallowed origins."
         },
         {

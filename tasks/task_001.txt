@@ -56,13 +56,13 @@ export function setupRestApi(app) {
 ### Details:
 Create a new 'rest' directory under 'src/api'. Within 'rest', create subdirectories for 'routes', 'middleware', and 'controllers'. This structure will separate concerns and improve code organization.
 
-## 2. Implement Base Router Configuration [pending]
+## 2. Implement Base Router Configuration [done]
 ### Dependencies: 1.1
 ### Description: Set up the base router configuration for REST endpoints in the Fastify server.
 ### Details:
 Create an 'index.ts' file in the 'src/api/rest' directory. Implement a 'setupRestApi' function that initializes Fastify plugins, registers route handlers, and sets up basic configurations like CORS and error handling.
 
-## 3. Configure CORS for REST Endpoints [pending]
+## 3. Configure CORS for REST Endpoints [done]
 ### Dependencies: 1.2
 ### Description: Implement CORS (Cross-Origin Resource Sharing) configuration for the REST API endpoints.
 ### Details:
