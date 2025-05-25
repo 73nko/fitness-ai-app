@@ -12,17 +12,15 @@
     "test": "jest"
   },
   "dependencies": {
+    "@bufbuild/protobuf": "^2.2.5",
     "@improbable-eng/grpc-web": "^0.15.0",
-    "@improbable-eng/grpc-web-node-http-transport": "^0.15.0",
     "@improbable-eng/grpc-web-react-native-transport": "^0.15.0",
-    "@protobuf-ts/grpc-transport": "^2.9.6",
     "@react-native-async-storage/async-storage": "^1.24.0",
     "@react-navigation/native": "^7.1.6",
     "@react-navigation/native-stack": "^7.3.10",
     "expo": "^52.0.44",
     "expo-status-bar": "~2.0.1",
     "google-protobuf": "^3.21.2",
-    "grpc-web": "^1.4.2",
     "nativewind": "^4.1.23",
     "react": "^18.3.1",
     "react-native": "^0.76.0",
