@@ -14,10 +14,13 @@
         "resolveJsonModule": true,
         "declaration": true,
         "sourceMap": true,
-        "baseUrl": ".",
+        "baseUrl": "..",
         "paths": {
             "@/*": [
-                "src/*"
+                "server/src/*"
+            ],
+            "@shared-types/*": [
+                "shared-types/src/*"
             ]
         }
     },

@@ -6,6 +6,9 @@
         "paths": {
             "@/*": [
                 "src/*"
+            ],
+            "@shared-types/*": [
+                "../shared-types/src/*"
             ]
         },
         "jsx": "react-native",
