@@ -72,11 +72,14 @@ Create 'server/src/services/user.ts'. Define UserService class with methods: get
 Created `server/src/services/user.ts` with a placeholder `UserService` class. Implemented `getUserProfile` and `updateProfile` methods returning mock data. The mock data structure has been adjusted to match the `UserResponse` and `ProfileData` schemas from `shared-types`. This ensures consistency between the service layer and the API contracts.
 </info added on 2025-05-25T11:25:51.678Z>
 
-## 3. Implement GET /profile endpoint [pending]
+## 3. Implement GET /profile endpoint [done]
 ### Dependencies: 4.1, 4.2
 ### Description: Create a GET endpoint for retrieving user profiles
 ### Details:
 In userRoutes function, add fastify.get('/profile', ...) route. Use authenticate middleware. Implement handler to call userService.getUserProfile(). Return 404 if profile not found, otherwise return profile data.
+<info added on 2025-05-25T11:26:40.369Z>
+Implemented GET /profile endpoint in server/src/api/rest/routes/user.ts. The route uses authMiddleware for authentication and calls userService.getUserProfile() to fetch user data. Returns 404 if the profile is not found, and 200 with profile data if successful. Basic error handling has been added to manage potential exceptions during the request processing.
+</info added on 2025-05-25T11:26:40.369Z>
 
 ## 4. Implement PUT /profile endpoint [pending]
 ### Dependencies: 4.1, 4.2

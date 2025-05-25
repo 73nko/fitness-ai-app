@@ -1,23 +1,43 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-// import { UserService } from '../../../services/user'; // Placeholder, will be created in subtask 4.2
-// import { authMiddleware } from '../middleware/authMiddleware'; // Placeholder for auth middleware
+import { UserService } from '../../../services/user'; // Uncommented
+import { authMiddleware } from '../middleware/authMiddleware'; // Uncommented
 // import { UpdateProfileRequestSchema, UpdateProfileRequest } from '@shared-types/user'; // Placeholder for later use
 
 export async function userRoutes(fastify: FastifyInstance): Promise<void> {
-  // const userService = new UserService(); // Placeholder
+  const userService = new UserService(); // Uncommented
 
   fastify.get(
     '/profile',
     {
-      // onRequest: [authMiddleware] // Placeholder: Apply auth middleware in subtask 4.3/4.5
+      onRequest: [authMiddleware], // Apply auth middleware
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      // const userId = request.user?.id;
-      // if (!userId) return reply.status(401).send({ error: 'Unauthorized' });
-      // const profile = await userService.getUserProfile(userId);
-      // if (!profile) return reply.status(404).send({ error: 'Not Found', message: 'Profile not found' });
-      // return reply.send(profile);
-      return reply.send({ message: 'GET /profile placeholder' });
+      try {
+        const userId = request.user?.id; // Access user from authenticated request
+        if (!userId) {
+          // This case should ideally be handled by authMiddleware, but good for type safety
+          return reply
+            .status(401)
+            .send({ error: 'Unauthorized', message: 'User not authenticated' });
+        }
+
+        const profile = await userService.getUserProfile(userId);
+
+        if (!profile) {
+          return reply.status(404).send({
+            error: 'NotFound',
+            message: 'User profile not found',
+          });
+        }
+
+        return reply.status(200).send(profile);
+      } catch (error) {
+        fastify.log.error(error);
+        return reply.status(500).send({
+          error: 'InternalServerError',
+          message: 'Failed to retrieve user profile',
+        });
+      }
     }
   );
 

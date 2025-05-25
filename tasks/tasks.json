@@ -280,8 +280,8 @@
             1,
             2
           ],
-          "details": "In userRoutes function, add fastify.get('/profile', ...) route. Use authenticate middleware. Implement handler to call userService.getUserProfile(). Return 404 if profile not found, otherwise return profile data.",
-          "status": "pending",
+          "details": "In userRoutes function, add fastify.get('/profile', ...) route. Use authenticate middleware. Implement handler to call userService.getUserProfile(). Return 404 if profile not found, otherwise return profile data.\n<info added on 2025-05-25T11:26:40.369Z>\nImplemented GET /profile endpoint in server/src/api/rest/routes/user.ts. The route uses authMiddleware for authentication and calls userService.getUserProfile() to fetch user data. Returns 404 if the profile is not found, and 200 with profile data if successful. Basic error handling has been added to manage potential exceptions during the request processing.\n</info added on 2025-05-25T11:26:40.369Z>",
+          "status": "done",
           "testStrategy": "Integration test GET /profile with authenticated and unauthenticated requests"
         },
         {
